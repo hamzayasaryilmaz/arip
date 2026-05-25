@@ -65,6 +65,7 @@ echo "If the digest above shows:"
 echo "  - 'quality band distribution: high=...' with high > 0  → ingestion is healthy"
 echo "  - only 'medium=...' or 'low=...'                        → fix telemetry hygiene first"
 echo "  - 'No rule-grounded recurring patterns'                 → either healthy traffic OR signals missing; see docs/OBSERVE_PILOT_KIT.md"
+echo "  - 100% 'no_rule_matched' clusters                       → your telemetry shape may not match any of the 5 rules' contracts (e.g. handler-pattern, retry attrs); this is honest abstention, often pointing at a NormalizationConfig override worth making — see docs/ONBOARDING.md"
 echo "  - many singleton clusters with order-IDs in operations  → P0 — file an issue, do NOT pilot"
 echo
 echo "Ready to run a real pilot? See docs/OBSERVE_PILOT_KIT.md."

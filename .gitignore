@@ -41,3 +41,9 @@ tests/playwright/playwright-report/
 # ─── Logs / temp ─────────────────────────────────────────────────────
 *.log
 .tmp/
+
+# Exception: pilot-archive self-audit.log is part of the archive
+# contract (see bin/run-observe-pilot.sh and
+# docs/observe-pilot-archive/README.md). Keep it committed.
+!docs/observe-pilot-archive/**/self-audit.log
+!pilot-archive/**/self-audit.log

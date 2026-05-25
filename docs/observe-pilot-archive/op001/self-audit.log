@@ -1,0 +1,58 @@
+=== arip observe self-audit ===
+source: /tmp/hotrod-traces/bundles.jsonl
+throwaway store: /var/folders/jm/1_yp2yg90mn6qhrd5h8lk4000000gn/T/tmp.Lqrah6orlT/audit.db (cleaned up on exit)
+
+warning: `VIRTUAL_ENV=/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9` does not match the project environment path `arip-core/.venv` and will be ignored; use `--active` to target the active environment instead
+ARIP observe · source jsonl:///private/tmp/hotrod-traces/bundles.jsonl · budget 
+5
+  no prior cursor — starting from the beginning
+  traces observed: 5 · new events: 5 · idempotent skips: 0
+  digest written to 
+/var/folders/jm/1_yp2yg90mn6qhrd5h8lk4000000gn/T/tmp.Lqrah6orlT/digest.md
+
+=== digest (truncated to first 80 lines) ===
+# ARIP observation digest
+
+_generated 2026-05-25T23:16:55.875956+00:00_
+
+## Run summary
+
+- source: `jsonl:///private/tmp/hotrod-traces/bundles.jsonl`
+- traces observed: 5
+- new events: 5
+- idempotent skips: 0
+- cursor: `∅` → `168019`
+- quality band distribution: medium=5
+- abstentions: no_rule_matched=5
+
+## Recurring patterns (rule-grounded)
+
+_No rule-grounded recurring patterns in this window._
+
+## Recurring abstentions
+
+These telemetry shapes recurred, but the engine could not nominate a primary hypothesis. Useful for telemetry-hygiene work, not for acting on the anomaly itself.
+
+| abstention | recurrence | first seen | last seen | services | operations |
+|---|---:|---|---|---|---|
+| `no_rule_matched` | 5 | 2026-05-25 23:15 | 2026-05-25 23:15 | customer, driver, frontend, mysql, redis-manual, route | /customer, /dispatch, /route, FindDriverIDs (+4) |
+
+## What this digest is NOT
+
+- Not a list of confirmed root causes — every cluster is an
+  evidence-aligned observation, not a verdict.
+- Not a reproduction-candidate list — no test draft has been
+  generated, no PR has been opened.
+- Not an alerting surface — recurrence counts are descriptive,
+  not thresholds for paging anyone.
+- Not exhaustive — observation mode runs against whatever sources
+  the operator pointed it at; absence here ≠ absence in reality.
+
+=== self-audit signals ===
+If the digest above shows:
+  - 'quality band distribution: high=...' with high > 0  → ingestion is healthy
+  - only 'medium=...' or 'low=...'                        → fix telemetry hygiene first
+  - 'No rule-grounded recurring patterns'                 → either healthy traffic OR signals missing; see docs/OBSERVE_PILOT_KIT.md
+  - many singleton clusters with order-IDs in operations  → P0 — file an issue, do NOT pilot
+
+Ready to run a real pilot? See docs/OBSERVE_PILOT_KIT.md.

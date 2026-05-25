@@ -96,6 +96,25 @@ first; running observe against thin telemetry is not a meaningful
 trust signal — it's a telemetry-hygiene signal. Tell the pilot
 participant honestly.
 
+**Additionally — naming-convention check.** ARIP's default config
+(`arip-core/configs/demo.yaml`) sets
+`handler_operation_patterns: ['handle_']`. If the pilot system's
+HTTP/RPC handler operation names do **not** contain the substring
+`handle_`, the `latency_vs_db` rule will silently abstain because
+it can't identify entry-point spans. Quick check: list 5–10
+operation names from a representative trace; if none contain
+`handle_`, add a config override per
+[docs/ONBOARDING.md](ONBOARDING.md) ("Writing your config" section)
+before the pilot. Common needed overrides:
+
+- Spring controllers → `['Controller#']`
+- Go HTTP routers   → endpoint patterns like `['/api/', '/v1/']`
+- gRPC services     → method substrings like `['Service/']`
+
+This pathology was observed during op001 (HotROD warm-up) — see
+[docs/observe-pilot-archive/op001/usability-findings.md](observe-pilot-archive/op001/usability-findings.md)
+Finding 1.
+
 ### Step 2 — Pull one window of telemetry
 
 Pick the **smallest meaningful window** — typically 1 hour of
