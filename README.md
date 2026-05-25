@@ -233,4 +233,4 @@ Pre-release validation:
 
 Per-release runbook: [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 
-License: TBD.
+License: Apache-2.0 — see [LICENSE](LICENSE).
