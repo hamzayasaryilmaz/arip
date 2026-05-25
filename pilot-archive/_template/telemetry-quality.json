@@ -1,0 +1,9 @@
+{
+  "_comment": "Extracted from the 'quality' field of the investigation JSON ('reports/<slug>.json'). Run `arip investigate ... --out reports/` and pull this object out. Do NOT hand-edit.",
+  "score": null,
+  "confidence_band": null,
+  "coverages": [],
+  "findings": [],
+  "rules_likely_to_fire": [],
+  "rules_will_not_fire": []
+}

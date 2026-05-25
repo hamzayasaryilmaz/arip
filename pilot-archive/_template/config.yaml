@@ -1,0 +1,17 @@
+# pilot-archive/<pilot-id>/config.yaml
+#
+# Copy from arip-core/configs/demo.yaml as the starting template and
+# override only fields whose attribute names differ in the pilot's
+# telemetry. Annotate every edit inline with the WHY.
+#
+# This file is committed verbatim into the pilot archive so a future
+# reader can reproduce the pilot's investigation against the
+# (anonymised) telemetry in spans.json and logs.json.
+
+name: pilot-<pilot-id>
+
+# Example edit pattern:
+#   business_keys:
+#     - account.id     # pilot uses account.id instead of order.id
+#
+# Leave a field commented out (or absent) to keep the default.

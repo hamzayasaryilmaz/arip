@@ -1,0 +1,47 @@
+# Synthetic "foreign telemetry conventions" config.
+#
+# This file exists to prove the canonical-signals layer is real:
+# a hypothetical customer whose services emit attributes under
+# different names should be able to investigate their telemetry
+# by editing this file, not by writing new rules.
+#
+# All attribute names below are made up to be visibly different from
+# the demo stack. The same investigation rules apply unchanged.
+name: foreign-conventions-example
+
+business_keys:
+  - tenant.id
+  - account.id
+
+retry:
+  attempt_attr:       http.retry.attempt_number
+  max_attempts_attr:  http.retry.max
+  backoff_attr:       http.retry.backoff.delay_ms
+  reason_attr:        http.retry.cause
+  policy_attr:        http.retry.policy
+
+db:
+  system_attr: data.layer
+  operation_patterns: ["data.", "sql."]
+  pool:
+    acquired_attr:        sql.connection_pool.in_use
+    max_attr:             sql.connection_pool.size
+    wait_ms_attr:         sql.connection_pool.wait_time_ms
+    empty_acquires_attr:  sql.connection_pool.misses_total
+    acquire_operation_names:
+      - sql.connection.acquire
+      - sql.connection.hold
+
+http_status_attrs:
+  - http.response_status
+  - response.status_code
+
+handler_operation_patterns:
+  - "Controller#"
+  - "Resource."
+  - handle_
+
+state_transitions:
+  event_name: domain.event.state_changed
+  from_attr:  domain.from_state
+  to_attr:    domain.to_state

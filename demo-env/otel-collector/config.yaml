@@ -1,0 +1,66 @@
+# ARIP OTel Collector configuration.
+#
+# Sits between the application services and Jaeger. Its job is to
+# enforce a sampling strategy that NEVER throws away an error trace
+# (because that's exactly what ARIP needs to investigate), while
+# discarding most successful traffic to keep storage costs bounded.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    send_batch_size: 256
+    timeout: 1s
+
+  # Tail-based sampling: decide what to keep AFTER seeing the whole
+  # trace. Policies are OR-ed; if any matches the trace is kept.
+  tail_sampling:
+    decision_wait: 5s            # buffer spans for this long before deciding
+    num_traces: 50000            # in-memory bound
+    expected_new_traces_per_sec: 100
+    policies:
+      # Always keep traces that contain at least one ERROR span.
+      - name: keep-errors
+        type: status_code
+        status_code: {status_codes: [ERROR]}
+
+      # Always keep slow traces (>= 250ms end-to-end).
+      - name: keep-slow
+        type: latency
+        latency: {threshold_ms: 250}
+
+      # Always keep traces that any client explicitly marked for capture.
+      # Tests / failure injectors can set this attribute to guarantee
+      # the trace survives sampling end-to-end.
+      - name: keep-explicit
+        type: string_attribute
+        string_attribute:
+          key: arip.force_sample
+          values: ["true", "1"]
+
+      # Sample everything else at 5%.
+      - name: probabilistic-baseline
+        type: probabilistic
+        probabilistic: {sampling_percentage: 5}
+
+exporters:
+  otlp/jaeger:
+    endpoint: jaeger:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [tail_sampling, batch]
+      exporters: [otlp/jaeger]
+  telemetry:
+    logs:
+      level: info

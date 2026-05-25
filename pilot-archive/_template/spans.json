@@ -1,0 +1,4 @@
+{
+  "_comment": "Anonymised trace dump from the pilot's Jaeger/Tempo. Replace with the actual JSON from `curl http://<pilot-jaeger>/api/traces/<trace-id>` after running it through the anonymisation rules in docs/PILOT_RUNBOOK.md Step 7. Two-person sign-off required.",
+  "data": []
+}

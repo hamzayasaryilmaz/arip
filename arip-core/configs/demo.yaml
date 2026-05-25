@@ -1,0 +1,47 @@
+# Default normalization config — matches the ARIP demo stack exactly.
+#
+# Every field here is also the built-in default. Use this file as a
+# starting template when onboarding a new environment whose telemetry
+# conventions differ.
+name: demo
+
+# Business keys carried as a span attribute. Used for cross-trace
+# correlation in concurrent_modification.
+business_keys:
+  - order.id
+
+# Retry signal attribute names emitted by payment-service's retry loop.
+retry:
+  attempt_attr:       retry.attempt
+  max_attempts_attr:  retry.max_attempts
+  backoff_attr:       retry.backoff_ms
+  reason_attr:        retry.reason
+  policy_attr:        retry.policy
+
+# Database signal attributes.
+db:
+  system_attr: db.system
+  operation_patterns: ["db."]
+  pool:
+    acquired_attr:         db.pool.acquired
+    max_attr:              db.pool.max
+    wait_ms_attr:          db.pool.wait_ms
+    empty_acquires_attr:   db.pool.empty_acquires_total
+    acquire_operation_names:
+      - db.acquire_connection
+      - db.connection_hold
+
+# HTTP status code attribute names (priority order).
+http_status_attrs:
+  - http.response.status_code
+  - http.status_code
+
+# Operation-name substrings that identify "handler" spans.
+handler_operation_patterns:
+  - handle_
+
+# State-transition span events emitted by payment-service.
+state_transitions:
+  event_name: state.transition
+  from_attr:  state.from
+  to_attr:    state.to

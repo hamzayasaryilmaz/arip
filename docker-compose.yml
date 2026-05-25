@@ -1,0 +1,102 @@
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.60
+    container_name: arip-jaeger
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "16686:16686"   # Jaeger UI
+    # OTLP receivers (4317/4318) are kept on the internal network only:
+    # the otel-collector service publishes those ports to the host and
+    # forwards what survives tail sampling to jaeger:4317.
+    networks: [arip]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.110.0
+    container_name: arip-otel-collector
+    command: ["--config=/etc/otel/config.yaml"]
+    volumes:
+      - ./demo-env/otel-collector/config.yaml:/etc/otel/config.yaml:ro
+    ports:
+      - "4317:4317"   # OTLP gRPC (services send here)
+      - "4318:4318"   # OTLP HTTP
+    depends_on:
+      jaeger:
+        condition: service_started
+    networks: [arip]
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: arip-postgres
+    environment:
+      POSTGRES_USER: arip
+      POSTGRES_PASSWORD: arip
+      POSTGRES_DB: arip
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./demo-env/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U arip -d arip"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    networks: [arip]
+
+  redis:
+    image: redis:7-alpine
+    container_name: arip-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+    networks: [arip]
+
+  inventory-service:
+    build:
+      context: ./demo-env/inventory-service
+    container_name: arip-inventory
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_SERVICE_NAME: inventory-service
+      POSTGRES_DSN: postgres://arip:arip@postgres:5432/arip?sslmode=disable
+      # Deliberately small pool: the demo's pool_exhaustion scenario
+      # relies on a handful of concurrent requests being able to
+      # saturate this in a single test run.
+      POOL_MAX_CONNS: "3"
+      PORT: "8081"
+    ports:
+      - "8081:8081"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    networks: [arip]
+
+  payment-service:
+    build:
+      context: ./demo-env/payment-service
+    container_name: arip-payment
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_PROTOCOL: http/protobuf
+      OTEL_SERVICE_NAME: payment-service
+      INVENTORY_URL: http://inventory-service:8081
+      PORT: "8080"
+    ports:
+      - "8080:8080"
+    depends_on:
+      inventory-service:
+        condition: service_started
+      otel-collector:
+        condition: service_started
+    networks: [arip]
+
+networks:
+  arip:
+    driver: bridge

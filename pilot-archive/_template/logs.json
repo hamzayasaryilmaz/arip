@@ -1,0 +1,4 @@
+{
+  "_comment": "Anonymised structured log entries from the pilot's services during the failure window. One log entry per array element. Same anonymisation rules as spans.json. Two-person sign-off required.",
+  "entries": []
+}
