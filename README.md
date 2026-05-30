@@ -34,6 +34,7 @@ cross-run memory store. Demo runs end-to-end in ~30 seconds; the
 
 | You want…                                  | Read                                                       |
 |--------------------------------------------|------------------------------------------------------------|
+| **Onboard ARIP to your own telemetry in 20 minutes** | `arip init --from <BUNDLE> --out arip.yaml` + `arip doctor --from <BUNDLE>` (auto-generates config + tells you which rules will fire and why). See [docs/FIELDTEST.md](docs/FIELDTEST.md) for the scenarios that drove these commands. |
 | The fastest possible path to a running demo | [QUICKSTART.md](QUICKSTART.md)                            |
 | The whole story (what / why / how)          | [docs/ARIP_DEMO_WALKTHROUGH.md](docs/ARIP_DEMO_WALKTHROUGH.md) |
 | A reading script for a video / screencast   | [DEMO_SCRIPT.md](DEMO_SCRIPT.md) + [docs/demo-moments-cheatsheet.md](docs/demo-moments-cheatsheet.md) |
@@ -233,15 +234,20 @@ they will move only when there is a concrete user reason.
 
 Pre-release validation:
 
-- **249/249 unit tests pass** (`cd arip-core && uv run pytest`) — includes
+- **259/259 unit tests pass** (`cd arip-core && uv run pytest`) — includes
   10 calibration-benchmark scenarios, 16+ observation stress scenarios,
   9 real-world ingestion validation tests, 7 Tempo adapter tests,
   16 Cypress + 9 Playwright listener tests, 12 markdown-renderer tests,
   9 prerequisite-gate tests, 14 hygiene tests, 10 Elasticsearch
   adapter tests, 8 Honeycomb adapter tests, 7 AWS X-Ray
-  adapter tests, 3 Loki adapter regression tests, and 6 field-test
-  regression tests (per-rule evidence-kinds policy, latency threshold
-  tightening, CLI flag aliases) — see [docs/FIELDTEST.md](docs/FIELDTEST.md)
+  adapter tests, 3 Loki adapter regression tests, 6 field-test
+  regression tests, and 10 onboarding tests (`arip init` +
+  `arip doctor`) — see [docs/FIELDTEST.md](docs/FIELDTEST.md)
+- **`arip init` + `arip doctor`** — auto-generate a NormalizationConfig
+  from a sample bundle, then diagnose per-rule which signals are
+  present/missing. New-operator onboarding goes from "read 4 docs +
+  edit YAML by hand" (4-8 hours) to "feed one bundle file, get a
+  starter config + signal census" (~20 minutes)
 - **Investigation mode supports Playwright AND Cypress** — `arip
   investigate <report.json>` auto-detects the framework
 - **Telemetry prerequisite gate** — `arip observe` fail-fasts when the

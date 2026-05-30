@@ -6,6 +6,47 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added (onboarding self-serve — `arip init` + `arip doctor`)
+
+The first version of ARIP shipped with a manual onboarding path:
+read 4 docs, study sample configs, hand-write a NormalizationConfig
+YAML, then run preflight and iterate. Real-world feedback (and the
+field-test reflection in `docs/FIELDTEST.md`) made it clear that
+4-8 hours of hand-holding per new operator is the single largest
+adoption friction.
+
+Two new commands cut this to ~20 minutes of self-serve:
+
+- **`arip init --from <BUNDLE> --out arip.yaml`** — inspect a
+  sample JSONL trace bundle (the output of any
+  `bin/*-export-to-bundles.py` adapter) and auto-generate a
+  starter NormalizationConfig. Detects: business_keys (attributes
+  named `*.id` carrying ID-shaped values across ≥2 services),
+  expected_services_per_trace (distinct service names),
+  expected_log_sources (services emitting logs), and
+  handler_operation_patterns (HTTP-verb + handle_ prefixes on
+  near-root spans). Every detected value carries an inline comment
+  explaining the basis for the choice.
+
+- **`arip doctor --from <BUNDLE>`** — per-rule diagnostic that
+  reports for each of the 5 shipped rules: would_fire / blocked /
+  silent, what required signals are present in this sample, what
+  optional signals would lift confidence, and exactly which next
+  step the operator should take. Auto-discovers `arip.yaml` in
+  cwd if `--config` not specified.
+
+Both commands work on the same JSONL bundle file format the
+adapters produce, so an operator can sample one real trace bundle
+and have a working config + signal census in a single pass.
+
+Implementation lives in a new `arip_core/onboarding/` package
+(auto_config.py + doctor.py + bundle_loader.py). 10 regression
+tests in `tests/test_onboarding.py`.
+
+Also: `arip observe` now auto-discovers `arip.yaml` / `arip.yml` /
+`.arip/config.yaml` in cwd when `--config` is omitted (saves
+operators from typing `--config` on every run).
+
 ### Added (commercial scaffolding — services-around-OSS path)
 
 - **`docs/COMMERCIAL_OFFERINGS.md`** — master doc defining 4

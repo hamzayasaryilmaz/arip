@@ -182,6 +182,44 @@ def build_parser() -> argparse.ArgumentParser:
     pf.add_argument("--config", type=Path, default=None, help="Normalization config YAML")
     pf.add_argument("--environment", default="preflight")
 
+    # ─── init ────────────────────────────────────────────────────────
+    ini = sub.add_parser(
+        "init",
+        help=(
+            "Auto-generate a NormalizationConfig YAML from a sample of "
+            "real trace bundles. Replaces the read-docs-and-write-YAML "
+            "onboarding path with a one-shot bootstrap."
+        ),
+    )
+    ini.add_argument("--from", dest="src_bundle", type=Path, required=True,
+                     help="JSONL trace bundle (output of any bin/*-export-to-bundles.py)")
+    ini.add_argument("--out", type=Path, default=Path("arip.yaml"),
+                     help="Write generated YAML here (default: ./arip.yaml)")
+    ini.add_argument("--environment", default="production",
+                     help="Friendly name for this config (default: production)")
+    ini.add_argument("--limit", type=int, default=200,
+                     help="Cap traces inspected (default: 200)")
+    ini.add_argument("--force", action="store_true",
+                     help="Overwrite --out even if it already exists")
+
+    # ─── doctor ──────────────────────────────────────────────────────
+    doc = sub.add_parser(
+        "doctor",
+        help=(
+            "Per-rule diagnostic: for each of the 5 shipped rules, "
+            "report whether it would fire on a sample of real telemetry "
+            "and exactly which signal is missing if not."
+        ),
+    )
+    doc.add_argument("--from", dest="src_bundle", type=Path, required=True,
+                     help="JSONL trace bundle to inspect")
+    doc.add_argument("--config", type=Path, default=None,
+                     help="NormalizationConfig YAML (auto-discovered if absent)")
+    doc.add_argument("--out", type=Path, default=None,
+                     help="Write report to this path (default: stdout)")
+    doc.add_argument("--limit", type=int, default=200,
+                     help="Cap traces inspected (default: 200)")
+
     return parser
 
 
@@ -201,6 +239,10 @@ def main(argv: list[str] | None = None) -> int:
         return _cmd_preflight(args)
     if args.cmd == "observe":
         return _cmd_observe(args)
+    if args.cmd == "init":
+        return _cmd_init(args)
+    if args.cmd == "doctor":
+        return _cmd_doctor(args)
     parser.error(f"unknown command: {args.cmd}")
     return 2
 
@@ -540,9 +582,19 @@ def _cmd_observe(args) -> int:
     from .observation.pipeline import observe
     from .observation.store import ObservationStore
 
-    if args.config is not None:
-        config = load_config_yaml(args.config)
-        console.print(f"[bold]Normalization config:[/bold] {args.config} (name: {config.name})")
+    cfg_path = args.config
+    if cfg_path is None:
+        # Auto-discover an arip config in cwd — same convention as
+        # `arip doctor`. Saves operators from typing --config every run.
+        for candidate in (Path("arip.yaml"), Path("arip.yml"), Path(".arip/config.yaml")):
+            if candidate.exists():
+                cfg_path = candidate
+                console.print(f"[dim]using auto-discovered config: {candidate}[/dim]")
+                break
+
+    if cfg_path is not None:
+        config = load_config_yaml(cfg_path)
+        console.print(f"[bold]Normalization config:[/bold] {cfg_path} (name: {config.name})")
     else:
         config = NormalizationConfig()
 
@@ -637,6 +689,103 @@ def _parse_window_days(window: str | None) -> int | None:
         return max(1, int(w))
     except ValueError:
         return None
+
+
+# ----- init ----------------------------------------------------------
+
+
+def _cmd_init(args) -> int:
+    from .onboarding import detect_config, load_correlated, render_yaml
+
+    if not args.src_bundle.exists():
+        console.print(f"[red]ERROR[/red]: bundle file not found: {args.src_bundle}")
+        return 2
+    if args.out.exists() and not args.force:
+        console.print(
+            f"[yellow]{args.out} already exists.[/yellow] Re-run with "
+            f"`--force` to overwrite, or pass `--out other.yaml`."
+        )
+        return 2
+
+    samples = load_correlated(args.src_bundle, limit=args.limit)
+    if not samples:
+        console.print(f"[red]ERROR[/red]: no parseable bundles in {args.src_bundle}")
+        return 1
+
+    detected = detect_config(samples)
+    yaml_text = render_yaml(detected, environment_name=args.environment)
+    args.out.parent.mkdir(parents=True, exist_ok=True)
+    args.out.write_text(yaml_text)
+
+    console.print(
+        f"[green]wrote {args.out}[/green] "
+        f"({detected.n_traces} trace(s), {detected.n_spans} spans, "
+        f"{detected.n_logs} logs inspected)"
+    )
+    console.print(
+        f"  business_keys: {[k for k, _ in detected.business_keys] or '(none detected)'}"
+    )
+    console.print(f"  services:      {detected.services or '(none)'}")
+    console.print(
+        f"  log_sources:   {detected.log_sources or '(no logs in sample)'}"
+    )
+    console.print(
+        f"  handlers:      {[p for p, _ in detected.handler_patterns] or '(defaults will be used)'}"
+    )
+    console.print(
+        "\nReview the generated YAML, then pass it to `arip observe --config "
+        f"{args.out}` or `arip investigate --config {args.out}`."
+    )
+    return 0
+
+
+# ----- doctor --------------------------------------------------------
+
+
+def _cmd_doctor(args) -> int:
+    from .canonical.config import NormalizationConfig, load_config_yaml
+    from .onboarding import diagnose, load_correlated, render_doctor_report
+
+    if not args.src_bundle.exists():
+        console.print(f"[red]ERROR[/red]: bundle file not found: {args.src_bundle}")
+        return 2
+
+    # Auto-discover config from cwd if not specified.
+    cfg_path = args.config
+    if cfg_path is None:
+        for candidate in (Path("arip.yaml"), Path("arip.yml"), Path(".arip/config.yaml")):
+            if candidate.exists():
+                cfg_path = candidate
+                console.print(f"[dim]using auto-discovered config: {candidate}[/dim]")
+                break
+
+    if cfg_path is not None:
+        config = load_config_yaml(cfg_path)
+    else:
+        config = NormalizationConfig()
+        console.print(
+            "[dim]no --config and no arip.yaml in cwd — using defaults. "
+            "Run `arip init --from <BUNDLE>` to generate one.[/dim]"
+        )
+
+    samples = load_correlated(args.src_bundle, config=config, limit=args.limit)
+    if not samples:
+        console.print(f"[red]ERROR[/red]: no parseable bundles in {args.src_bundle}")
+        return 1
+
+    report = diagnose(samples)
+    text = render_doctor_report(report)
+
+    if args.out:
+        args.out.parent.mkdir(parents=True, exist_ok=True)
+        args.out.write_text(text)
+        console.print(f"[green]wrote report to {args.out}[/green]")
+    else:
+        # Print the markdown to stdout, no Rich formatting on the body
+        # (markdown contains its own structure; Rich would mangle it).
+        sys.stdout.write(text)
+        sys.stdout.write("\n")
+    return 0
 
 
 if __name__ == "__main__":
