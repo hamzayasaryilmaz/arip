@@ -32,6 +32,37 @@ In particular:
 If a proposal cannot pass these gates, it stays in
 FUTURE_ARCHITECTURE.md with a documented trigger, or is closed.
 
+## Commercial path (parallel to phase progression)
+
+The OSS engine stays Apache-2.0, single-tier. Revenue comes from
+**services around the OSS**, not license tiers. This path is
+parallel to (not blocking) the technical roadmap below — it's the
+funding model that lets pilot validation happen with real customers
+instead of runner-self-pilots.
+
+Four offerings, fully documented in
+[docs/COMMERCIAL_OFFERINGS.md](docs/COMMERCIAL_OFFERINGS.md):
+
+| Offering | What | Price | Duration |
+|---|---|---|---|
+| **A — Integration** | Wire ARIP into the customer's CI + telemetry | $5-15k | 2-4 weeks |
+| **B — Telemetry Hygiene Audit** | Standalone audit; deliver report on what would let ARIP fire | $3-8k | 1 week |
+| **C — Paid Pilot** *(recommended starter)* | 2-week structured engagement, closes the Phase 2 entry gate AND generates revenue | $5-10k | 2 weeks |
+| **D — Support contract** | Ongoing operator support + new-adapter quota | $12-36k/yr | annual |
+
+What is **explicitly NOT** part of the commercial path (each kills
+the project's positioning if pursued):
+
+- No hosted SaaS / managed control plane
+- No paid license tier (no "Enterprise Edition")
+- No proprietary rules / closed-source engine modifications
+- No alerting / paging / ticketing add-ons
+- No GUI / dashboard product
+
+Operator-side adapters added on-request during paid pilots; the
+authoritative status of every adapter (shipped / on-request / not
+pursuing) lives in [docs/adapter-roadmap.md](docs/adapter-roadmap.md).
+
 ## Phase 1 — MVP  ✓ shipped
 
 The credible local-first OSS MVP. The substrate for everything below.

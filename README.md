@@ -39,6 +39,10 @@ cross-run memory store. Demo runs end-to-end in ~30 seconds; the
 | A reading script for a video / screencast   | [DEMO_SCRIPT.md](DEMO_SCRIPT.md) + [docs/demo-moments-cheatsheet.md](docs/demo-moments-cheatsheet.md) |
 | Run a real pilot                            | [PILOT.md](PILOT.md) (why) + [docs/PILOT_RUNBOOK.md](docs/PILOT_RUNBOOK.md) (how) + [docs/PILOT_METRICS.md](docs/PILOT_METRICS.md) (metrics) |
 | Run **observe-mode** against your telemetry | [docs/OBSERVE_MODE.md](docs/OBSERVE_MODE.md) (what) + [docs/INGESTION_GUIDE.md](docs/INGESTION_GUIDE.md) (per-source recipes) + [docs/OBSERVE_PILOT_KIT.md](docs/OBSERVE_PILOT_KIT.md) (first pilot) |
+| **Which backends ARIP supports** (and which we won't pursue) | [docs/adapter-roadmap.md](docs/adapter-roadmap.md) |
+| **Write a new adapter for your backend** | [docs/WRITING_AN_ADAPTER.md](docs/WRITING_AN_ADAPTER.md) + [bin/adapter-template.py](bin/adapter-template.py) |
+| **Deploy ARIP to production CI**            | [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md) |
+| **Commercial offerings** (integration / audit / paid pilot / support) | [docs/COMMERCIAL_OFFERINGS.md](docs/COMMERCIAL_OFFERINGS.md) + [docs/ARIP_ONE_PAGER.md](docs/ARIP_ONE_PAGER.md) + [docs/COMMON_OBJECTIONS_FAQ.md](docs/COMMON_OBJECTIONS_FAQ.md) |
 | Why ARIP sometimes says "I don't know"      | [docs/abstention-gallery.md](docs/abstention-gallery.md)  |
 | How ARIP behaves on messy telemetry         | [docs/calibration-gallery.md](docs/calibration-gallery.md) |
 | Workflow comparison (manual vs ARIP)        | [docs/before-after-investigation.md](docs/before-after-investigation.md) |
@@ -203,10 +207,14 @@ arip/
 ├── demo-env/               Go services + OTel Collector + Postgres + failure-injector scripts
 ├── tests/playwright/       Playwright integration tests (one per failure pattern)
 ├── bin/
-│   ├── arip-demo.sh                   narrated 6-step golden demo
-│   ├── arip-e2e.sh                    unattended CI-style run
+│   ├── arip-demo.sh                       narrated 6-step golden demo
+│   ├── arip-e2e.sh                        unattended CI-style run
+│   ├── adapter-template.py                template — copy + adapt for your backend
 │   ├── jaeger-export-to-bundles.py        operator-side adapter (Jaeger HTTP API)
 │   ├── tempo-export-to-bundles.py         operator-side adapter (Tempo OTLP JSON)
+│   ├── grafana-cloud-export-to-bundles.py operator-side adapter (Grafana Cloud Tempo)
+│   ├── honeycomb-export-to-bundles.py     operator-side adapter (Honeycomb events)
+│   ├── aws-xray-to-bundles.py             operator-side adapter (X-Ray segments)
 │   ├── loki-export-to-logs.py             operator-side adapter (Loki streams)
 │   ├── elasticsearch-traces-to-bundles.py operator-side adapter (ES + APM Server)
 │   ├── elasticsearch-logs-to-bundles.py   operator-side adapter (ES logs join)
@@ -225,11 +233,12 @@ they will move only when there is a concrete user reason.
 
 Pre-release validation:
 
-- **223/223 unit tests pass** (`cd arip-core && uv run pytest`) — includes
+- **238/238 unit tests pass** (`cd arip-core && uv run pytest`) — includes
   10 calibration-benchmark scenarios, 16+ observation stress scenarios,
   9 real-world ingestion validation tests, 7 Tempo adapter tests,
   16 Cypress + 9 Playwright listener tests, 12 markdown-renderer tests,
-  9 prerequisite-gate tests, 14 hygiene tests, and 10 Elasticsearch
+  9 prerequisite-gate tests, 14 hygiene tests, 10 Elasticsearch
+  adapter tests, 8 Honeycomb adapter tests, and 7 AWS X-Ray
   adapter tests
 - **Investigation mode supports Playwright AND Cypress** — `arip
   investigate <report.json>` auto-detects the framework
@@ -244,6 +253,26 @@ Pre-release validation:
 - **Elasticsearch adapters** — `bin/elasticsearch-traces-to-bundles.py`
   and `bin/elasticsearch-logs-to-bundles.py` for teams using ES
   instead of (or alongside) Jaeger/Tempo/Loki
+- **Honeycomb, Grafana Cloud Tempo, AWS X-Ray adapters** —
+  `bin/honeycomb-export-to-bundles.py`,
+  `bin/grafana-cloud-export-to-bundles.py`,
+  `bin/aws-xray-to-bundles.py`. Wire-format conversion is unit-tested
+  against synthetic fixtures; live-API auth/pagination paths are
+  unverified (see [docs/adapter-roadmap.md](docs/adapter-roadmap.md)
+  for the precise status of each adapter)
+- **Adapter authoring kit** — [bin/adapter-template.py](bin/adapter-template.py)
+  + [docs/WRITING_AN_ADAPTER.md](docs/WRITING_AN_ADAPTER.md). 4-8h
+  to add a new backend; same JSONL bundle output, no engine
+  modifications
+- **Commercial offerings documented** —
+  [docs/COMMERCIAL_OFFERINGS.md](docs/COMMERCIAL_OFFERINGS.md)
+  (integration / audit / paid pilot / support contract structure),
+  [docs/ARIP_ONE_PAGER.md](docs/ARIP_ONE_PAGER.md) (CTO leave-behind),
+  [docs/COMMON_OBJECTIONS_FAQ.md](docs/COMMON_OBJECTIONS_FAQ.md)
+  (honest objection handling),
+  [docs/templates/](docs/templates/) (SOW + audit report templates),
+  [docs/PRODUCTION_DEPLOYMENT.md](docs/PRODUCTION_DEPLOYMENT.md)
+  (3 deployment topologies + step-by-step setup)
 - **GitHub Actions template for observe-mode** —
   [`.github/workflows/arip-observe.yml.example`](.github/workflows/arip-observe.yml.example)
   for scheduled weekly anomaly digests

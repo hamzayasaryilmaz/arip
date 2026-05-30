@@ -6,6 +6,103 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added (commercial scaffolding — services-around-OSS path)
+
+- **`docs/COMMERCIAL_OFFERINGS.md`** — master doc defining 4
+  service offerings: A (Integration $5-15k), B (Telemetry Hygiene
+  Audit $3-8k), C (Paid Pilot $5-10k — recommended starter), D
+  (Support contract $12-36k/yr). Includes qualifier questions,
+  what-NOT-to-sell anti-goals, and meeting prep checklist.
+- **`docs/ARIP_ONE_PAGER.md`** — print-and-leave-behind for CTO
+  meetings. Honest comparison table vs "AI RCA tools", explicit
+  list of what ARIP is NOT, honest gaps section (async messaging,
+  5 rules narrow, requires distributed tracing).
+- **`docs/COMMON_OBJECTIONS_FAQ.md`** — honest objection-handling
+  reference covering "we have Datadog already", "is this AI?",
+  "5 rules sounds limiting", funded?, customer references, refund
+  policy, etc. No marketing — direct answers including when to
+  walk away.
+- **`docs/templates/PAID_PILOT_SOW.md`** — Statement of Work
+  template for Offering C (14 sections incl. scope, deliverables,
+  customer responsibilities, refund policy, IP, confidentiality).
+- **`docs/templates/INTEGRATION_ENGAGEMENT.md`** — SOW template
+  for Offering A (11 sections + bug-fix window terms + scope
+  multipliers).
+- **`docs/templates/TELEMETRY_HYGIENE_AUDIT_REPORT.md`** — Offering B
+  deliverable template (11 sections: distributed tracing baseline,
+  span tree propagation, service coverage, log-trace correlation,
+  business-key propagation, rule readiness, prioritized fixes, ARIP
+  fit assessment). Three honest verdict examples (GOOD/MIXED/POOR).
+- **`docs/PRODUCTION_DEPLOYMENT.md`** — operator deployment guide.
+  3 topology options (in-CI, scheduled GHA observe-mode, self-hosted),
+  step-by-step Option 1 production setup (7 steps prereq → handover),
+  operations + disaster recovery + when NOT to deploy.
+
+### Added (adapter framework + 3 OTel-compatible adapters)
+
+- **`bin/adapter-template.py`** — copy-and-modify template for
+  authoring new operator-side adapters. Helpers: `_dig`,
+  `_first`, `_to_iso` (handles epoch ns/ms/s + ISO),
+  `_duration_us` (heuristic ns/us/ms), `_status` (normalises
+  string/int/dict). `_FieldConfig` overridable via CLI;
+  `_hits_from_file` with JSON / JSON-array / NDJSON fallback;
+  `_hits_from_vendor` skeleton for live API path. Non-zero exit +
+  warning when zero bundles produced.
+- **`docs/WRITING_AN_ADAPTER.md`** — adapter authoring guide
+  (8 steps from format-understanding to documentation). Quality bar
+  checklist + "what you should NOT do" anti-goal protections (no
+  invented telemetry, no engine modifications, no anti-goal drift).
+- **`bin/honeycomb-export-to-bundles.py`** — Honeycomb adapter.
+  Field defaults `trace.trace_id` / `trace.span_id` /
+  `trace.parent_id` / `service.name` / `name` / `timestamp` /
+  `duration_ms` (× 1000 → us) / `status_code`. Multi-format status
+  handling (boolean `error`, string ERROR, OTLP numeric). Live
+  Honeycomb Query API path (create query → poll → fetch) included
+  but unverified.
+- **`bin/grafana-cloud-export-to-bundles.py`** — wrapper around
+  Tempo adapter that handles Grafana Cloud auth (basic auth via
+  `stack_id:api_key`) + two-step search → fetch pattern. Delegates
+  actual conversion to `bin/tempo-export-to-bundles.py` via
+  subprocess. Live API path unverified.
+- **`bin/aws-xray-to-bundles.py`** — AWS X-Ray segments → bundles.
+  `_xray_trace_id_to_hex` strips `"1-"` prefix + dashes.
+  `_walk_segments` recursively flattens subsegments to spans with
+  `parent_span_id` chaining. Handles `Fault` / `Error` / `Throttle`
+  booleans → ERROR status. Flattens `Http` / `Aws` / `User` /
+  `Annotations` / `Metadata` sections to dotted-key attributes
+  (PascalCase keys preserved). Tested against synthetic X-Ray
+  fixtures; live AWS pull unverified.
+
+### Added (adapter inventory)
+
+- **`docs/adapter-roadmap.md`** — operator authority on "do we have
+  an adapter for X?". Three sections:
+  - **Currently shipped** (9 adapters with verified-test-status:
+    Jaeger / Tempo / Loki / ES traces / ES logs / Honeycomb /
+    Grafana Cloud Tempo / AWS X-Ray / directory of JSON bundles)
+  - **On-request** (11 vendor sketches with field mapping +
+    effort estimate + billing range: Datadog APM, New Relic APM,
+    Splunk APM, Splunk Cloud logs, Dynatrace, AppDynamics, Sumo
+    Logic, Logz.io, Azure App Insights, GCP Cloud Trace, AWS
+    CloudWatch Logs, custom internal logging)
+  - **Explicitly NOT pursuing** (Slack/Teams notifications, Jira
+    tickets, PagerDuty paging, auto-PR with fixes, Sentry, hosted
+    SaaS, GUI — each with anti-goal citation)
+  Prioritization rule: paid pilot demand drives, not popularity.
+
+### Added (test coverage for new adapters)
+
+- 8 tests for Honeycomb adapter (`test_honeycomb_adapter.py`):
+  event grouping, duration_ms → us, status-code variants (string
+  ERROR / boolean / OTLP numeric), unparseable-doc warning,
+  field-override flow, JSONL input format.
+- 7 tests for AWS X-Ray adapter (`test_xray_adapter.py`):
+  single-segment conversion, subsegment flattening with
+  `parent_span_id` chain, Fault/Error → ERROR, Http section
+  flattened to dotted-key attributes (PascalCase preserved),
+  X-Ray trace_id `"1-..."` format conversion, empty-input
+  warning.
+
 ### Added (robustness pass — telemetry hygiene + ES support)
 
 - **Telemetry prerequisite gate**
