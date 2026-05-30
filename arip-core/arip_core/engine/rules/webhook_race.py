@@ -14,6 +14,15 @@ name. It works from natural telemetry only:
 If two traces overlap in time AND each performs a state transition on
 the same order, that is a concurrent modification pattern — a class
 of failure of which "webhook arrived mid-checkout" is one example.
+
+Mode caveat (field-test F5):
+  Both racing traces must be in the same CorrelatedTelemetry. In
+  `arip investigate` mode the TimelineBuilder pulls related traces
+  via business-key lookup. In `arip observe` mode each bundle is
+  investigated standalone — no cross-trace joining happens — so this
+  rule cannot fire on observe-mode data unless both racing traces
+  happen to be in the same bundle. Cross-trace observe-mode joining
+  is on the future-work list (docs/FUTURE_ARCHITECTURE.md).
 """
 
 from __future__ import annotations

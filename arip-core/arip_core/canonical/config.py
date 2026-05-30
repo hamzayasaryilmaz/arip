@@ -159,8 +159,14 @@ def _config_from_dict(data: dict[str, Any], source_name: str) -> NormalizationCo
     """Build a NormalizationConfig from a nested dict (YAML-friendly)."""
     cfg = NormalizationConfig(name=data.get("name", source_name))
 
+    # `business_keys` is the canonical YAML name; `business_key_attrs`
+    # is accepted as an alias because that's the internal dataclass
+    # field name — operators writing YAML by matching the python
+    # field shouldn't be punished (field-test F9).
     if "business_keys" in data:
         cfg.business_key_attrs = list(data["business_keys"])
+    elif "business_key_attrs" in data:
+        cfg.business_key_attrs = list(data["business_key_attrs"])
 
     retry = data.get("retry") or {}
     cfg.retry_attempt_attr = retry.get("attempt_attr", cfg.retry_attempt_attr)
@@ -210,6 +216,7 @@ def _config_from_dict(data: dict[str, Any], source_name: str) -> NormalizationCo
     known_top_level = {
         "name",
         "business_keys",
+        "business_key_attrs",  # alias for business_keys
         "retry",
         "db",
         "http_status_attrs",

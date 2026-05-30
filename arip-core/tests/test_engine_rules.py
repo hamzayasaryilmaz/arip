@@ -310,18 +310,20 @@ def test_downstream_error_softens_claim_when_chain_not_fully_propagated():
 
 
 def test_latency_vs_db_fires_when_handler_dwarfs_db():
+    # 800ms handler with 8ms of DB work → 100× ratio above the
+    # new 200ms / 5ms-DB floors (field-test-driven tightening).
     handler = _span(
         op="inventory.handle_reserve",
         svc="inventory-service",
         span_id="h1",
-        duration_us=305_000,
+        duration_us=800_000,
     )
     db = _span(
         op="db.decrement_stock",
         svc="inventory-service",
         span_id="d1",
         parent="h1",
-        duration_us=1_200,
+        duration_us=8_000,
         attributes={"db.system": "postgresql"},
     )
     out = LatencyVsDBRule().evaluate(_ct([handler, db]))
@@ -332,12 +334,27 @@ def test_latency_vs_db_fires_when_handler_dwarfs_db():
 
 
 def test_latency_vs_db_silent_when_handler_fast():
-    handler = _span(op="inventory.handle_reserve", span_id="h1", duration_us=10_000)
+    # Below the 200ms floor — the rule should not fire even at 10× ratio.
+    handler = _span(op="inventory.handle_reserve", span_id="h1", duration_us=180_000)
     db = _span(
         op="db.x",
         span_id="d1",
         parent="h1",
-        duration_us=8_000,
+        duration_us=15_000,
+        attributes={"db.system": "postgresql"},
+    )
+    assert LatencyVsDBRule().evaluate(_ct([handler, db])) == []
+
+
+def test_latency_vs_db_silent_when_db_too_fast_to_measure():
+    # New floor: DB total below 0.5ms is ignored to avoid ratio
+    # nonsense (e.g. 400ms / 0.1ms = 4000× — pure noise).
+    handler = _span(op="inventory.handle_reserve", span_id="h1", duration_us=400_000)
+    db = _span(
+        op="db.x",
+        span_id="d1",
+        parent="h1",
+        duration_us=200,  # 0.2ms — well below the 0.5ms floor
         attributes={"db.system": "postgresql"},
     )
     assert LatencyVsDBRule().evaluate(_ct([handler, db])) == []

@@ -46,7 +46,9 @@ from .reporter.models import FlakySignal, InvestigationReport
 console = Console()
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
+    """Construct the top-level argparse parser. Extracted so tests can
+    introspect flags without invoking subcommand handlers."""
     parser = argparse.ArgumentParser(
         prog="arip", description="Autonomous Reliability Investigation Platform"
     )
@@ -148,8 +150,14 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Normalization config YAML",
     )
+    # `--out` is the canonical name (matches `arip investigate --out`).
+    # `--digest-out` is kept as an alias for backwards compatibility —
+    # the original observe flag, before the field-test surfaced the
+    # cross-subcommand inconsistency.
     obs.add_argument(
+        "--out",
         "--digest-out",
+        dest="digest_out",
         type=Path,
         default=None,
         help="Write digest markdown to this path (default: stdout)",
@@ -174,6 +182,11 @@ def main(argv: list[str] | None = None) -> int:
     pf.add_argument("--config", type=Path, default=None, help="Normalization config YAML")
     pf.add_argument("--environment", default="preflight")
 
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
     logging.basicConfig(
         level=logging.DEBUG if getattr(args, "verbose", False) else logging.WARNING,

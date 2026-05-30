@@ -175,7 +175,13 @@ def evaluate_abstention(
 
     top = hypotheses[0]
     distinct_kinds = {e.kind for e in top.evidence}
-    if top.confidence < WEAK_CONFIDENCE_CEILING or len(distinct_kinds) < MIN_EVIDENCE_KINDS:
+    # Per-rule evidence-kinds policy (field-test F6). The hypothesis
+    # itself declares its floor — most rules default to MIN_EVIDENCE_KINDS=2,
+    # but rules whose signal is inherently single-kind (e.g. latency
+    # disproportion, span-tree shape) may set min_evidence_kinds=1 when
+    # they already enforce a sharp absolute threshold.
+    kinds_floor = getattr(top, "min_evidence_kinds", MIN_EVIDENCE_KINDS)
+    if top.confidence < WEAK_CONFIDENCE_CEILING or len(distinct_kinds) < kinds_floor:
         return AbstentionReason(
             code="weak_evidence",
             headline="Top hypothesis lacks corroborating evidence.",

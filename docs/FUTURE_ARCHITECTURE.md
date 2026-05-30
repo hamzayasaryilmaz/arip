@@ -300,6 +300,41 @@ deterministic investigation engine.
 
 ---
 
+## 11.5. Cross-trace joining in observe-mode (field-test F5)
+
+`arip observe` currently investigates each trace bundle standalone.
+Each bundle becomes one `CorrelatedTelemetry` with `related_trace_ids=[]`,
+unlike `arip investigate` mode which uses the `TimelineBuilder` to pull
+related traces via business-key lookup.
+
+**Consequence:** the `concurrent_modification` (webhook_race) rule
+fundamentally cannot fire on observe-mode data, because the two racing
+traces it needs to compare are in separate bundles. Field test
+(arip-fieldtest/06-concurrent-modification) confirmed: rule never
+matches in observe mode despite a textbook webhook race.
+
+**Trigger to build this:** when an operator running observe-mode reports
+"the concurrent_modification rule never fires even though my system has
+real races, while `arip investigate` on the same traces catches them."
+
+**Implementation sketch:**
+- Index observation events in the SQLite store by business_key value.
+- When ingesting a new bundle, query the index for bundles in the last
+  `--cross-trace-window` (default: 5min) whose business_key values
+  overlap with the current bundle's.
+- Join those bundles' spans into the current ct before rule evaluation.
+- Cap the join at a per-bundle span budget (e.g. 200 spans) to bound
+  memory and rule-evaluation cost.
+- Add `--no-cross-trace` flag for operators who explicitly want
+  per-bundle isolation.
+
+**Anti-goal protection:** this stays read-only, runs on the same
+in-process SQLite store, doesn't pull telemetry from new sources, and
+doesn't change rule reasoning — it just extends what's visible to a
+single rule invocation.
+
+**Cost:** ~1 day of work + 1 calibration scenario before shipping.
+
 ## 12. Generic observability vendor positioning
 
 We are explicitly **not** competing with Honeycomb/Datadog on

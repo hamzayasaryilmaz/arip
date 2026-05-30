@@ -36,6 +36,16 @@ class Hypothesis:
     evidence: list[Evidence] = field(default_factory=list)
     suggested_next_step: str | None = None
     rule_id: str | None = None
+    # Per-hypothesis evidence-kinds floor (field-test F6).
+    # Default 2 matches the engine-wide trust contract: every primary
+    # must be backed by at least two distinct evidence KINDS (e.g.
+    # span + log). Rules that fundamentally produce a single-kind
+    # signal at high confidence (e.g. latency_vs_db, where the
+    # disproportion IS the evidence and correlated error logs don't
+    # exist in many cases) may lower this to 1 when they're already
+    # demanding a sharp threshold. Raising the bar for the abstention
+    # layer beyond 2 is allowed but rarely needed.
+    min_evidence_kinds: int = 2
 
     @property
     def rank(self) -> tuple[int, float]:

@@ -75,7 +75,15 @@ def observe(
     skipped = 0
     prerequisite_failure: PrerequisiteFailure | None = None
     hygiene_findings: list[str] = []
+    hygiene_seen: set[str] = set()  # dedupe across traces
+    HYGIENE_SAMPLE = 20  # check the first N traces, not just 1
+    hygiene_checked = 0
     first_trace_checked = False
+    # Service-set tracker for the "trace fan-out narrower than expected"
+    # hygiene finding (field test F4 — broken propagation produces
+    # disjoint traces, not orphan spans, so per-trace checks miss it).
+    seen_services_overall: set[str] = set()
+    narrow_trace_examples: list[tuple[str, list[str]]] = []
 
     def _advance_cursor(obs_cursor: str) -> None:
         """Update the in-memory + persisted cursor.
@@ -119,10 +127,31 @@ def observe(
                     # Do NOT advance the cursor — operator should be able to
                     # fix instrumentation and re-run against the same bundle.
                     break
-            # First-pass hygiene findings (run only on first valid trace
-            # to keep cost bounded; same source = same shape, so the
-            # findings are representative).
-            hygiene_findings = collect_hygiene_findings(ct_check, config)
+        # Sample hygiene findings across the first N valid traces and
+        # dedupe — running on just the first trace silently missed
+        # cases where the first trace happened to be healthy baseline
+        # traffic while later traces in the same source had the
+        # actual hygiene gap (field-test F4).
+        if hygiene_checked < HYGIENE_SAMPLE:
+            ct_h = _build_correlated_telemetry(obs, config)
+            for finding in collect_hygiene_findings(ct_h, config):
+                # Dedupe by full text; findings are stable strings.
+                if finding not in hygiene_seen:
+                    hygiene_seen.add(finding)
+                    hygiene_findings.append(finding)
+            hygiene_checked += 1
+
+        # Track services per trace to detect propagation breaks that
+        # produce DISJOINT traces (not orphans within one trace, which
+        # the in-trace hygiene check already catches). If the source
+        # eventually sees 4+ distinct services overall but most traces
+        # touch only 1, that's a likely traceparent-propagation gap.
+        trace_services = {s.service_name for s in obs.spans if s.service_name}
+        seen_services_overall.update(trace_services)
+        if len(trace_services) <= 1 and len(narrow_trace_examples) < 3:
+            narrow_trace_examples.append(
+                (obs.trace_id, sorted(trace_services) or ["(no service_name)"])
+            )
 
         try:
             ev = _observe_one(obs, store, config)
@@ -140,6 +169,28 @@ def observe(
             rule_counts[ev.rule_id] = rule_counts.get(ev.rule_id, 0) + 1
         if ev.abstention_code:
             abstention_counts[ev.abstention_code] = abstention_counts.get(ev.abstention_code, 0) + 1
+
+    # Aggregate hygiene finding: trace fan-out narrower than expected.
+    # If the overall source has 4+ services but a meaningful chunk of
+    # traces touch only one of them, the most likely cause is broken
+    # traceparent propagation at some service boundary (API gateway
+    # is the most common culprit) — services emit telemetry but in
+    # disjoint root traces instead of one connected trace.
+    if len(seen_services_overall) >= 4 and narrow_trace_examples:
+        examples_str = ", ".join(
+            f"trace {tid[:10]}… → {svcs}" for tid, svcs in narrow_trace_examples
+        )
+        narrow_finding = (
+            f"Trace fan-out gap: this source has seen {len(seen_services_overall)} "
+            f"distinct services overall ({sorted(seen_services_overall)}), but "
+            f"some traces touch only one of them. Examples: {examples_str}. "
+            f"Likely cause: traceparent propagation breaks at a service boundary, "
+            f"producing disjoint traces instead of one connected trace. The "
+            f"per-trace span-tree gap check cannot see this because the gap "
+            f"is BETWEEN traces, not within one."
+        )
+        if narrow_finding not in hygiene_seen:
+            hygiene_findings.append(narrow_finding)
 
     finished = datetime.now(tz=UTC)
     return ObservationSummary(
