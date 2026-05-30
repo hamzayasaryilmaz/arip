@@ -7,7 +7,8 @@ is a 30-second-to-2-minute check. Total: ~20 minutes.
 
 | ☐ | Check                                                                                    | Command / where                                                  |
 |---|------------------------------------------------------------------------------------------|------------------------------------------------------------------|
-| ☐ | All unit tests pass                                                                      | `cd arip-core && uv run pytest`  (expect: 62 passed)             |
+| ☐ | All unit tests pass                                                                      | `cd arip-core && uv run pytest`  (expect: 249 passed)            |
+| ☐ | For major engine/rule/default changes: re-run field-test scenarios                       | See [docs/FIELDTEST.md](docs/FIELDTEST.md). 10 scenarios against a real OTel-Python stack; 9 expected to produce the same primary/hygiene outcome. |
 | ☐ | Demo runner preflight catches missing tools                                              | Temporarily rename `uv` on PATH, run `bin/arip-demo.sh`          |
 | ☐ | Demo runner self-bootstraps cleanly on a fresh clone                                     | Delete `tests/playwright/node_modules` and `arip-core/.venv`, then `bin/arip-demo.sh` |
 | ☐ | `bin/arip-demo.sh` completes A → F                                                       | `ARIP_DEMO_NONINTERACTIVE=1 bin/arip-demo.sh`                    |

@@ -233,13 +233,15 @@ they will move only when there is a concrete user reason.
 
 Pre-release validation:
 
-- **238/238 unit tests pass** (`cd arip-core && uv run pytest`) — includes
+- **249/249 unit tests pass** (`cd arip-core && uv run pytest`) — includes
   10 calibration-benchmark scenarios, 16+ observation stress scenarios,
   9 real-world ingestion validation tests, 7 Tempo adapter tests,
   16 Cypress + 9 Playwright listener tests, 12 markdown-renderer tests,
   9 prerequisite-gate tests, 14 hygiene tests, 10 Elasticsearch
-  adapter tests, 8 Honeycomb adapter tests, and 7 AWS X-Ray
-  adapter tests
+  adapter tests, 8 Honeycomb adapter tests, 7 AWS X-Ray
+  adapter tests, 3 Loki adapter regression tests, and 6 field-test
+  regression tests (per-rule evidence-kinds policy, latency threshold
+  tightening, CLI flag aliases) — see [docs/FIELDTEST.md](docs/FIELDTEST.md)
 - **Investigation mode supports Playwright AND Cypress** — `arip
   investigate <report.json>` auto-detects the framework
 - **Telemetry prerequisite gate** — `arip observe` fail-fasts when the
