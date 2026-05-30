@@ -145,14 +145,31 @@ What ships:
       [docs/OBSERVE_OPERATOR_BRIEFING.md](docs/OBSERVE_OPERATOR_BRIEFING.md),
       [docs/observe-pilot-candidates.md](docs/observe-pilot-candidates.md),
       `bin/run-observe-pilot.sh`
-- [x] **Three runner-self-pilots against unknown OSS systems
+- [x] **Five runner-self-pilots against unknown OSS systems
       completed** — op001 (HotROD), op002 (CNCF OpenTelemetry
-      Demo), op003 (Grafana Tempo). Two real defects caught + fixed
+      Demo, healthy), op002b (OTel Demo + fault injection),
+      op002c (OTel Demo + fault injection + real Loki logs joined),
+      op003 (Grafana Tempo). Two real defects caught + fixed
       (abstention service-set cardinality + Tempo OTLP-JSON
       adapter). NEW operator adapter: `bin/tempo-export-to-bundles.py`.
+      **op002c milestone:** first `downstream_error` rule cluster
+      fired (high quality band) on an unknown OSS system, validating
+      the trust contract end-to-end against real telemetry from
+      OTel Demo + Jaeger + Loki.
       See [docs/UNKNOWN_SYSTEMS_VALIDATION.md](docs/UNKNOWN_SYSTEMS_VALIDATION.md).
       **These do NOT count toward Phase 2 entry gate** — explicit
       NO-HUMAN-OPERATOR disclaimers in each archive.
+- [x] **Cypress test framework support** — second framework
+      alongside Playwright. `arip investigate` auto-detects the
+      framework. trace_id extracted from title / err.message /
+      extras / W3C traceparent. 16 unit tests
+      ([test_cypress_listener.py](arip-core/tests/test_cypress_listener.py)).
+- [x] **GitHub Actions observe-mode template** —
+      [`.github/workflows/arip-observe.yml.example`](.github/workflows/arip-observe.yml.example).
+      Scheduled weekly digest, sticky issue comment, artifact
+      upload. Three export options (Jaeger / Tempo / pre-existing
+      JSONL artifact) + optional Loki join. Anti-goal-aligned:
+      no alerts, no PRs, no auto-remediation.
 - [ ] **First REAL engineer pilot** (`op004` or later — real human,
       their own CI/staging telemetry) — operator-coordinated, not
       buildable autonomously. This is the bar for Phase 2 entry gate.

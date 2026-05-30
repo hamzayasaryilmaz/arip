@@ -27,8 +27,9 @@ from rich.console import Console
 from rich.table import Table
 
 from .canonical.config import NormalizationConfig, load_config_yaml
+from .collector import cypress_listener
+from .collector import playwright_listener
 from .collector.failure_event import FailureEvent
-from .collector.playwright_listener import parse_report, parse_test_runs
 from .correlator.docker_logs_client import DockerLogsClient
 from .correlator.jaeger_client import JaegerClient
 from .correlator.models import CorrelatedTelemetry
@@ -50,8 +51,22 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="arip", description="Autonomous Reliability Investigation Platform")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    inv = sub.add_parser("investigate", help="Investigate failures in a Playwright report")
-    inv.add_argument("report", type=Path, help="Path to playwright-report.json")
+    inv = sub.add_parser(
+        "investigate",
+        help="Investigate failures in a Playwright or Cypress report (auto-detected)",
+    )
+    inv.add_argument(
+        "report",
+        type=Path,
+        help="Path to playwright-report.json or cypress-report.json "
+             "(framework auto-detected; override with --framework)",
+    )
+    inv.add_argument(
+        "--framework",
+        choices=["playwright", "cypress", "auto"],
+        default="auto",
+        help="Force a specific test framework parser. Default: auto-detect.",
+    )
     inv.add_argument("--out", type=Path, default=Path("reports"), help="Output directory (default: reports/)")
     inv.add_argument("--memory", type=Path, default=Path(".arip/memory.db"), help="SQLite memory store path")
     inv.add_argument("--environment", default="demo", help="Environment label")
@@ -170,8 +185,20 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _cmd_investigate(args) -> int:
-    events = parse_report(args.report, environment=args.environment)
-    runs = parse_test_runs(args.report, environment=args.environment)
+    framework = getattr(args, "framework", "auto")
+    if framework == "auto":
+        framework = cypress_listener.detect_report_kind(args.report)
+        if framework == "unknown":
+            # Default to playwright for back-compat with existing scripts.
+            framework = "playwright"
+    console.print(f"[dim]using {framework} report parser[/dim]")
+    if framework == "cypress":
+        events = cypress_listener.parse_report(args.report, environment=args.environment)
+        runs_raw = cypress_listener.parse_test_runs(args.report, environment=args.environment)
+    else:
+        events = playwright_listener.parse_report(args.report, environment=args.environment)
+        runs_raw = playwright_listener.parse_test_runs(args.report, environment=args.environment)
+    runs = runs_raw  # both listeners return list[TestRun] with the same shape
 
     args.out.mkdir(parents=True, exist_ok=True)
 

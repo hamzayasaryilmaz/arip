@@ -1,0 +1,182 @@
+# ARIP observe-mode — example GitHub Actions workflow
+#
+# Copy this file to .github/workflows/arip-observe.yml in your repo
+# (drop the .example suffix), customise the marked sections, and
+# commit. The workflow runs observe-mode against a telemetry export
+# on a schedule and posts the resulting digest as a sticky issue
+# comment on a dedicated tracking issue.
+#
+# Identity reminder: observe-mode is read-only by contract.
+# This workflow does NOT:
+#   - send alerts anywhere
+#   - open PRs with candidate tests
+#   - take any auto-remediation action
+#   - replace your observability dashboard
+# It produces a markdown digest you read. That's it.
+
+name: ARIP observe (weekly anomaly digest)
+
+on:
+  # Customise: how often you want a digest.
+  schedule:
+    - cron: '0 9 * * MON'   # every Monday 09:00 UTC
+  # Manual trigger for ad-hoc runs:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  issues: write             # for the sticky comment on the tracking issue
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      # === CUSTOMISE THESE ===
+      # The GitHub issue number you want the digest posted on.
+      # Create the issue manually first (e.g. "ARIP observe-mode digest").
+      DIGEST_ISSUE_NUMBER: "1"
+      # Default observation window (last 7 days).
+      OBSERVE_WINDOW: "7d"
+      # Minimum recurrence to surface a cluster (filters singletons).
+      OBSERVE_MIN_RECURRENCE: "3"
+
+    steps:
+      - name: Check out ARIP
+        uses: actions/checkout@v4
+        with:
+          repository: hamzayasaryilmaz/arip
+          # Pin to a tag for reproducibility:
+          ref: v0.1.0
+          path: arip
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.5.x"
+
+      - name: Sync arip-core deps
+        working-directory: arip/arip-core
+        run: uv sync --extra dev
+
+      # === CUSTOMISE: choose ONE of the export strategies below ===
+
+      # --- Option A: Jaeger HTTP API ---
+      # - name: Export traces from Jaeger
+      #   env:
+      #     JAEGER_URL: ${{ secrets.JAEGER_URL }}  # e.g. https://jaeger.internal
+      #     # If your Jaeger v2 uses a non-default base_path (see
+      #     # docs/INGESTION_GUIDE.md), include it here:
+      #     JAEGER_BASE_PATH: ""  # e.g. /jaeger/ui
+      #   run: |
+      #     mkdir -p /tmp/traces
+      #     # Replace 'frontend' with your actual entry service(s); add
+      #     # more curl lines per service if you have multiple entries.
+      #     curl -sf "${JAEGER_URL}${JAEGER_BASE_PATH}/api/traces?service=frontend&lookback=${OBSERVE_WINDOW}&limit=500" \
+      #       > /tmp/traces/jaeger.json
+      #     python3 arip/bin/jaeger-export-to-bundles.py \
+      #       --in  /tmp/traces/jaeger.json \
+      #       --out /tmp/traces/bundles.jsonl
+      #     echo "TELEMETRY_PATH=/tmp/traces/bundles.jsonl" >> $GITHUB_ENV
+
+      # --- Option B: Tempo OTLP JSON ---
+      # - name: Export traces from Tempo
+      #   env:
+      #     TEMPO_URL: ${{ secrets.TEMPO_URL }}
+      #   run: |
+      #     mkdir -p /tmp/traces
+      #     # Discover trace IDs in the window
+      #     curl -sf "${TEMPO_URL}/api/search?tags=&limit=500" \
+      #       | python3 -c "import json,sys; [print(t['traceID']) for t in json.load(sys.stdin).get('traces',[])]" \
+      #       > /tmp/traces/ids.txt
+      #     # Bulk-fetch each trace
+      #     while read tid; do
+      #       curl -sf "${TEMPO_URL}/api/traces/$tid"
+      #       echo
+      #     done < /tmp/traces/ids.txt > /tmp/traces/raw.jsonl
+      #     python3 arip/bin/tempo-export-to-bundles.py \
+      #       --in  /tmp/traces/raw.jsonl \
+      #       --out /tmp/traces/bundles.jsonl
+      #     echo "TELEMETRY_PATH=/tmp/traces/bundles.jsonl" >> $GITHUB_ENV
+
+      # --- Option C: existing JSONL artifact from another workflow ---
+      # - name: Download telemetry artifact
+      #   uses: actions/download-artifact@v4
+      #   with:
+      #     name: telemetry-bundles
+      #     path: /tmp/traces
+      # - name: Set TELEMETRY_PATH
+      #   run: echo "TELEMETRY_PATH=/tmp/traces/bundles.jsonl" >> $GITHUB_ENV
+
+      # === OPTIONAL: join Loki logs into the bundles ===
+      # - name: Export + join Loki logs
+      #   env:
+      #     LOKI_URL: ${{ secrets.LOKI_URL }}
+      #     LOKI_QUERY: '{service_name=~"frontend|cart|checkout"}'
+      #   run: |
+      #     curl -sf "${LOKI_URL}/loki/api/v1/query_range?query=$(python3 -c "from urllib.parse import quote; print(quote('$LOKI_QUERY'))")&limit=5000" \
+      #       > /tmp/traces/loki.json
+      #     python3 arip/bin/loki-export-to-logs.py \
+      #       --in            /tmp/traces/loki.json \
+      #       --bundles       /tmp/traces/bundles.jsonl \
+      #       --out           /tmp/traces/bundles-with-logs.jsonl \
+      #       --unmatched-out /tmp/traces/loki-unmatched.jsonl
+      #     echo "TELEMETRY_PATH=/tmp/traces/bundles-with-logs.jsonl" >> $GITHUB_ENV
+
+      - name: Run observe-mode
+        working-directory: arip/arip-core
+        run: |
+          mkdir -p ../.arip ../reports
+          uv run arip observe "$TELEMETRY_PATH" \
+            --store ../.arip/observation.db \
+            --budget 5000 \
+            --window "$OBSERVE_WINDOW" \
+            --min-recurrence "$OBSERVE_MIN_RECURRENCE" \
+            --digest-out ../reports/observe-digest.md
+
+      - name: Cache observation store across runs
+        uses: actions/cache@v4
+        with:
+          path: arip/.arip
+          key: arip-observe-${{ github.repository }}
+          restore-keys: |
+            arip-observe-
+
+      - name: Post digest as sticky issue comment
+        if: env.DIGEST_ISSUE_NUMBER != ''
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          # Sticky comments work on issues too if you pass the issue number.
+          number: ${{ env.DIGEST_ISSUE_NUMBER }}
+          path: arip/reports/observe-digest.md
+          header: arip-observe-digest
+
+      - name: Upload digest as workflow artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: arip-observe-digest
+          path: |
+            arip/reports/observe-digest.md
+            arip/.arip/observation.db
+          retention-days: 30
+
+# What this workflow deliberately does NOT do
+# -------------------------------------------
+# - Page anyone on-call. Use your existing alerting stack for that.
+# - Open issues automatically. The digest goes on ONE manually-created
+#   tracking issue (DIGEST_ISSUE_NUMBER) as a sticky comment that
+#   replaces itself each run. Operators read it; they decide what to act on.
+# - Create PRs with candidate tests. That capability is gated to Phase
+#   B/C/D triggers in FUTURE_ARCHITECTURE.md #11; not in v0.1.0.
+# - Replace any of your existing observability tools. Observe-mode is
+#   a deterministic anomaly-pattern digest, not an APM.
+#
+# See docs/OBSERVE_MODE.md for the full technical reference and
+# docs/POSITIONING.md for the anti-goals this workflow respects.

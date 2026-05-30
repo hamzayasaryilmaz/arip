@@ -223,18 +223,27 @@ they will move only when there is a concrete user reason.
 
 Pre-release validation:
 
-- **153/153 unit tests pass** (`cd arip-core && uv run pytest`) — includes
+- **169/169 unit tests pass** (`cd arip-core && uv run pytest`) — includes
   10 calibration-benchmark scenarios, 16 observation stress scenarios,
-  9 real-world ingestion validation tests, and 7 Tempo adapter tests
+  9 real-world ingestion validation tests, 7 Tempo adapter tests, and
+  16 Cypress listener tests
+- **Investigation mode supports Playwright AND Cypress** — `arip
+  investigate <report.json>` auto-detects the framework
+- **GitHub Actions template for observe-mode** —
+  [`.github/workflows/arip-observe.yml.example`](.github/workflows/arip-observe.yml.example)
+  for scheduled weekly anomaly digests
 - **End-to-end demo** completes in ≤ 16 seconds (success criterion: < 60 s)
 - **4 distinct rule fingerprints** produced reproducibly across runs
 - **Observe-mode** (Phase A) shipped read-only; see
   [docs/PHASE_A_VALIDATION.md](docs/PHASE_A_VALIDATION.md) for the
   stress + real-world ingestion validation passes
-- **Three unknown-OSS-system validations completed** — Jaeger HotROD
-  (op001), CNCF OpenTelemetry Demo (op002), Grafana Tempo
-  (op003). Two real defects caught + fixed during validation. Zero
-  false-high-confidence outcomes across all three. See
+- **Five unknown-OSS-system validations completed** — Jaeger HotROD
+  (op001), CNCF OpenTelemetry Demo (op002 healthy / op002b faulted /
+  op002c faulted+Loki), Grafana Tempo (op003). Two real defects
+  caught + fixed during validation. **op002c milestone: first rule
+  cluster (`downstream_error`, high quality) on telemetry the engine
+  had never seen, with real Loki logs joined through the adapter
+  chain.** See
   [docs/UNKNOWN_SYSTEMS_VALIDATION.md](docs/UNKNOWN_SYSTEMS_VALIDATION.md)
 
 Per-release runbook: [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).

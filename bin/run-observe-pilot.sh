@@ -48,8 +48,11 @@ fi
 SOURCE="$1"
 PILOT_ID="$2"
 
-if [[ ! "$PILOT_ID" =~ ^op[0-9]{3}$ ]]; then
-  echo "error: pilot-id must match opNNN (e.g. op001), got: $PILOT_ID" >&2
+if [[ ! "$PILOT_ID" =~ ^op[0-9]{3}[a-z]?$ ]]; then
+  echo "error: pilot-id must match opNNN or opNNNx (e.g. op001, op002b), got: $PILOT_ID" >&2
+  echo "       (single lowercase letter suffix is allowed for follow-up pilots" >&2
+  echo "        on the same system — e.g. op002 = baseline, op002b = with fault" >&2
+  echo "        injection enabled)" >&2
   exit 2
 fi
 

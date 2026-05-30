@@ -1,0 +1,65 @@
+=== arip observe self-audit ===
+source: /tmp/otel-fi/bundles-with-logs.jsonl
+throwaway store: /var/folders/jm/1_yp2yg90mn6qhrd5h8lk4000000gn/T/tmp.eVf5mIsBwy/audit.db (cleaned up on exit)
+
+warning: `VIRTUAL_ENV=/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9` does not match the project environment path `arip-core/.venv` and will be ignored; use `--active` to target the active environment instead
+ARIP observe · source jsonl:///private/tmp/otel-fi/bundles-with-logs.jsonl · 
+budget 5
+  no prior cursor — starting from the beginning
+  traces observed: 5 · new events: 5 · idempotent skips: 0
+  digest written to 
+/var/folders/jm/1_yp2yg90mn6qhrd5h8lk4000000gn/T/tmp.eVf5mIsBwy/digest.md
+
+=== digest (truncated to first 80 lines) ===
+# ARIP observation digest
+
+_generated 2026-05-30T15:38:25.177563+00:00_
+
+## Run summary
+
+- source: `jsonl:///private/tmp/otel-fi/bundles-with-logs.jsonl`
+- traces observed: 5
+- new events: 5
+- idempotent skips: 0
+- cursor: `∅` → `11136`
+- quality band distribution: low=3, medium=2
+- abstentions: no_rule_matched=5
+
+## Recurring patterns (rule-grounded)
+
+_No rule-grounded recurring patterns in this window._
+
+## Recurring abstentions
+
+These telemetry shapes recurred, but the engine could not nominate a primary hypothesis. Useful for telemetry-hygiene work, not for acting on the anomaly itself.
+
+| abstention | recurrence | first seen | last seen | services | operations |
+|---|---:|---|---|---|---|
+| `no_rule_matched` | 3 | 2026-05-30 15:35 | 2026-05-30 15:35 | frontend | GET |
+| `no_rule_matched` | 1 | 2026-05-30 15:35 | 2026-05-30 15:35 | frontend, frontend-web | GET, GET /api/data, executing api route (pages) /api/data, oteldemo.AdService/GetAds |
+| `no_rule_matched` | 1 | 2026-05-30 15:35 | 2026-05-30 15:35 | frontend, frontend-proxy | GET, router frontend egress |
+
+## Low-quality observations
+
+3 observation(s) in this window had a quality band of `low`. They are recorded for transparency but are NOT considered reliable enough to be acted on as patterns. Improving the telemetry hygiene gaps listed in each investigation's quality findings will let more of these become reasoning material.
+
+## What this digest is NOT
+
+- Not a list of confirmed root causes — every cluster is an
+  evidence-aligned observation, not a verdict.
+- Not a reproduction-candidate list — no test draft has been
+  generated, no PR has been opened.
+- Not an alerting surface — recurrence counts are descriptive,
+  not thresholds for paging anyone.
+- Not exhaustive — observation mode runs against whatever sources
+  the operator pointed it at; absence here ≠ absence in reality.
+
+=== self-audit signals ===
+If the digest above shows:
+  - 'quality band distribution: high=...' with high > 0  → ingestion is healthy
+  - only 'medium=...' or 'low=...'                        → fix telemetry hygiene first
+  - 'No rule-grounded recurring patterns'                 → either healthy traffic OR signals missing; see docs/OBSERVE_PILOT_KIT.md
+  - 100% 'no_rule_matched' clusters                       → your telemetry shape may not match any of the 5 rules' contracts (e.g. handler-pattern, retry attrs); this is honest abstention, often pointing at a NormalizationConfig override worth making — see docs/ONBOARDING.md
+  - many singleton clusters with order-IDs in operations  → P0 — file an issue, do NOT pilot
+
+Ready to run a real pilot? See docs/OBSERVE_PILOT_KIT.md.

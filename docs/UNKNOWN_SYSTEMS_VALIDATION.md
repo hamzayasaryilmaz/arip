@@ -22,10 +22,63 @@ live in the pilot archives below.
 
 | System | Archive | Engine outcome | Notes |
 |---|---|---|---|
-| Jaeger HotROD | [op001](observe-pilot-archive/op001/) | 1 abstention cluster from 40 traces | First unknown-system validation; documented in [HOTROD_FINDINGS.md](HOTROD_FINDINGS.md) |
-| OpenTelemetry Demo (CNCF) | [op002](observe-pilot-archive/op002/) | 8 abstention clusters from 291 traces (post-fix; was 23 pre-fix) | Caught service-set cardinality defect; fix applied + regression test added |
-| Grafana Tempo (single-binary) | [op003](observe-pilot-archive/op003/) | 2 abstention clusters from 30 traces | Caught Tempo↔Jaeger wire-format incompatibility; new adapter added |
-| Sock Shop (Weaveworks) | n/a | n/a — no telemetry | Confirmed `spring.zipkin.enabled=false` in compose; observe-mode does not apply |
+| Jaeger HotROD | [op001](observe-pilot-archive/op001/) | 1 abstention cluster from 40 traces | First unknown-system validation; [HOTROD_FINDINGS.md](HOTROD_FINDINGS.md) |
+| OpenTelemetry Demo, healthy | [op002](observe-pilot-archive/op002/) | 8 abstention clusters from 291 traces (post-fix; was 23) | Caught service-set cardinality defect; fix + regression test |
+| OpenTelemetry Demo, **+ fault injection (no logs)** | [op002b](observe-pilot-archive/op002b/) | 0 rule clusters; 17 abstention clusters (1 `weak_evidence`) | Trust contract gate working — engine refused to fire on span-only evidence despite real ERROR chains |
+| OpenTelemetry Demo, **+ fault injection + Loki logs joined** | [op002c](observe-pilot-archive/op002c/) | **1 rule cluster** (`downstream_error`, high quality) + 16 abstention clusters | **MILESTONE — first rule cluster fired on an unknown OSS system** |
+| Grafana Tempo (single-binary) | [op003](observe-pilot-archive/op003/) | 2 abstention clusters from 30 traces | Caught Tempo↔Jaeger wire-format incompatibility; new adapter |
+| Sock Shop (Weaveworks) | n/a | n/a — no telemetry | Confirmed `spring.zipkin.enabled=false`; observe-mode does not apply |
+
+## The op002→op002b→op002c ladder — trust-contract end-to-end proof
+
+The single most important validation result so far in the project's
+history. Three runs against the same OSS workload (OTel Demo),
+varying the telemetry richness at each step:
+
+| Step | Telemetry | Rule clusters | Abstentions | Quality bands |
+|---|---|---:|---|---|
+| **op002** | Healthy traffic, Jaeger only | 0 | 8 (all `no_rule_matched`) | 100% medium |
+| **op002b** | + fault injection (paymentUnreachable + 4 others), Jaeger only | 0 | 17 (1 of them `weak_evidence`) | 98.7% medium |
+| **op002c** | + **real Loki logs joined** for one trace | **1** (`downstream_error`, **high**) | 16 (collapsed 1 `weak_evidence` into the rule cluster) | 1 high observation |
+
+**What this proves end-to-end:**
+
+1. The engine **correctly detects** ERROR span chains crossing
+   service boundaries (verified in op002b by inspection of the
+   raw traces — the chains were there, the rule's evaluator did
+   identify them).
+2. The engine **refuses to promote** a rule cluster on span-only
+   evidence (op002b: 0 rule clusters despite valid chains, because
+   `MIN_EVIDENCE_KINDS=2` is enforced).
+3. Joining a single trace's correlated log entries through the
+   Loki adapter is enough to **flip** the same engine, on the same
+   trace, from `weak_evidence` abstention to a high-quality rule
+   cluster (op002c).
+4. The full chain — OTel Demo's flagd injects faults → Jaeger
+   captures spans → `bin/jaeger-export-to-bundles.py` converts →
+   `bin/loki-export-to-logs.py` joins logs → `arip observe` fires
+   the rule → digest renders — works **without any engine
+   modification**.
+
+**Why this matters.** Three separate OSS systems
+(OpenTelemetry Demo + Jaeger v2 + Grafana Loki), each maintained
+by different teams, none of which the engine had ever seen, feed
+ARIP through the standard pipeline and produce the first rule
+cluster from an unknown system. The trust contract — particularly
+`MIN_EVIDENCE_KINDS=2` — is now demonstrably enforced under real
+telemetry, not just synthetic fixtures. The gate is real.
+
+**Honest caveats:**
+
+- This is still a runner-self-pilot. No human engineer has read
+  this digest and acted on it. That bar is op004.
+- The rule cluster fired on a single trace (recurrence=1). A
+  recurring pattern would need multiple trace_ids' worth of
+  correlated logs joined. The pattern works the same; the
+  experiment was just narrow.
+- The fault injection used here is OTel Demo's controlled
+  feature-flag faults, not real-world unpredictable failures.
+  Real production telemetry would surface different shapes.
 
 ## The two defects caught during this iteration
 
