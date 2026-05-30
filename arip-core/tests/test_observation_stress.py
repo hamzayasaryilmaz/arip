@@ -371,6 +371,81 @@ def test_low_quality_telemetry_does_not_promote_rule_clusters(tmp_path: Path) ->
 # ---------- 11. Determinism: same input → same fingerprints ---------
 
 
+def test_abstention_fingerprint_collapses_high_service_count(tmp_path: Path) -> None:
+    """Regression for op002 (OTel Demo) finding: a multi-service mesh
+    where different requests touch different SUBSETS of services must
+    NOT produce one abstention cluster per unique service-set.
+
+    The fingerprint is keyed on entry-service(s), not the full
+    transitive service set. So 50 traces all entering at "frontend"
+    but touching 4 different downstream subsets must collapse to ONE
+    abstention cluster, not 4.
+    """
+    jsonl = tmp_path / "mesh.jsonl"
+    bundles: list[dict] = []
+    # Build 50 traces. All have entry-point span on "frontend".
+    # Vary which downstream services are touched per trace — this is
+    # exactly the OTel Demo pathology.
+    base = datetime(2026, 5, 30, 12, 0, 0, tzinfo=timezone.utc)
+    downstream_combos = [
+        ["cart"],
+        ["cart", "product-catalog"],
+        ["cart", "product-catalog", "recommendation"],
+        ["payment", "currency"],
+        ["payment", "currency", "shipping", "email"],
+    ]
+    for i in range(50):
+        tid = f"mesh-{i:04d}"
+        combo = downstream_combos[i % len(downstream_combos)]
+        spans = [{
+            "trace_id": tid,
+            "span_id": f"f{i}",
+            "parent_span_id": None,
+            "service_name": "frontend",
+            "operation_name": "GET /api/checkout",
+            "start_time": base.isoformat(),
+            "duration_us": 5000,
+            "status": "OK",
+            "status_message": "",
+            "attributes": {},
+            "events": [],
+        }]
+        for j, svc in enumerate(combo):
+            spans.append({
+                "trace_id": tid,
+                "span_id": f"d{i}-{j}",
+                "parent_span_id": f"f{i}",
+                "service_name": svc,
+                "operation_name": f"{svc}.handle",
+                "start_time": base.isoformat(),
+                "duration_us": 1000,
+                "status": "OK",
+                "status_message": "",
+                "attributes": {},
+                "events": [],
+            })
+        bundles.append({
+            "trace_id": tid,
+            "captured_at": base.isoformat(),
+            "spans": spans,
+            "logs": [],
+        })
+    write_jsonl(jsonl, bundles)
+
+    store = ObservationStore(tmp_path / "obs.db")
+    observe(source=JsonlTraceSource(jsonl), store=store, budget=100)
+
+    abstention_clusters = store.list_clusters(kind="abstention")
+    # All 50 traces share entry-point service "frontend" → one cluster.
+    assert len(abstention_clusters) == 1, (
+        f"high-service-count mesh produced {len(abstention_clusters)} abstention "
+        f"clusters; expected exactly 1 because all traces share entry-point "
+        f"service. This is the cardinality bug fixed during op002 validation; "
+        f"if this test fails, fingerprint regressed to using full service_set."
+    )
+    assert abstention_clusters[0].recurrence_count == 50
+
+
 def test_fingerprint_determinism_across_runs(tmp_path: Path) -> None:
     """Same input file processed twice into separate stores must yield
     identical fingerprint sets. Determinism at the cluster level is

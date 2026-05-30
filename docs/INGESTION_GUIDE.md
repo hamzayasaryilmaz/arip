@@ -64,6 +64,32 @@ The conversion handles Jaeger's typed-tag pathology (`int64`, `bool`,
 Bundles produced by this path have **empty `logs`**. If you also have
 correlated logs in Loki, follow Workflow 2 to join them in.
 
+### Jaeger v2 `base_path` configuration (observed in op002 validation)
+
+Some Jaeger v2 deployments configure a `base_path` in their
+`jaeger_query` extension config. Then the HTTP API is under
+`<base_path>/api/...` rather than `/api/...`. Example from the
+OpenTelemetry Demo's bundled Jaeger config:
+
+```yaml
+extensions:
+  jaeger_query:
+    base_path: /jaeger/ui
+```
+
+So the trace search endpoint there is
+`http://jaeger:16686/jaeger/ui/api/traces?service=...`.
+
+How to detect: `curl http://<jaeger>/api/traces` returns the Jaeger
+UI's HTML (the `<!doctype html>` line) instead of a JSON error.
+That's the signal that the API has moved under a base_path. Inspect
+the Jaeger config (`jaeger_query.base_path`) or the UI's network
+panel to find it.
+
+This is **not** a defect — it's a deliberate Jaeger v2 deployment
+choice. The adapter accepts whatever JSON you feed it; you just
+need to know which URL to curl.
+
 ## Workflow 2 — Loki log streams
 
 ```bash
@@ -92,6 +118,59 @@ below.
 
 You can repoint the trace_id field name with `--trace-key` if your
 convention differs (e.g. `--trace-key traceId`).
+
+## Workflow 2.5 — Grafana Tempo (OTLP JSON)
+
+**Important.** Tempo's `/api/traces/<trace_id>` endpoint does NOT
+return Jaeger-compatible JSON. It returns OpenTelemetry's
+protobuf-derived JSON shape (`batches` containing `resource` +
+`scopeSpans` + `spans`, with base64-encoded IDs and OTLP attribute
+wrappers). The Jaeger adapter does not work against this. Use the
+Tempo-specific adapter instead:
+
+```bash
+# Tempo's search uses a different query model than Jaeger.
+# Step 1: discover trace IDs in a window
+curl -s "$TEMPO/api/search?tags=&limit=100" \
+  | jq -r '.traces[].traceID' > /tmp/trace-ids.txt
+
+# Step 2: bulk-fetch each trace's full response into one JSONL file
+while read tid; do
+  curl -sf "$TEMPO/api/traces/$tid"
+  echo
+done < /tmp/trace-ids.txt > /tmp/tempo-raw.jsonl
+
+# Step 3: convert OTLP JSON → ARIP trace bundles
+python3 bin/tempo-export-to-bundles.py \
+  --in  /tmp/tempo-raw.jsonl \
+  --out /tmp/bundles.jsonl
+
+# Step 4: observe
+uv run arip observe /tmp/bundles.jsonl --store .arip/observation.db
+```
+
+The Tempo adapter:
+- Decodes base64-encoded `traceId` / `spanId` to hex
+- Unwraps OTLP attribute value types (stringValue / intValue /
+  boolValue / doubleValue)
+- Maps OTLP status code 2 → "ERROR" and preserves the status message
+- Extracts `service.name` from the resource attributes per batch
+- Skips empty batches without crashing
+
+What it does NOT handle (deferred until a real pilot needs it):
+- Tempo's binary protobuf endpoint (`Accept: application/protobuf`).
+  Use the JSON variant.
+- Span events / logs inside spans (decoded as empty list — Tempo
+  doesn't carry these on most production paths anyway; use Loki
+  for application logs and join via Workflow 2).
+- Tempo's TraceQL search syntax. The example above uses the
+  simplest "all traces in window" search.
+
+This adapter was added during op003 validation. See
+[UNKNOWN_SYSTEMS_VALIDATION.md](UNKNOWN_SYSTEMS_VALIDATION.md)
+"Defect 2" for the full discovery + fix narrative, and
+[observe-pilot-archive/op003/](observe-pilot-archive/op003/) for
+the captured digest and findings.
 
 ## Workflow 3 — GitHub Actions artifact
 

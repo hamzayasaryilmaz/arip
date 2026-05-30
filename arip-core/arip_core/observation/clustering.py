@@ -44,23 +44,54 @@ def fingerprint_for_result(
 def _abstention_fingerprint(
     ct: CorrelatedTelemetry, abstention: AbstentionReason
 ) -> str:
-    """Abstention fingerprint = (code, service_set).
+    """Abstention fingerprint = (code, entry_service_set).
 
-    Operation names are deliberately NOT in the fingerprint. Production
-    operation names frequently carry high-cardinality path parameters
-    (`POST /checkout/order-12345`) or auto-generated tokens; including
-    them splits every observation into its own singleton cluster,
-    making the abstention digest unreadable under real-world noise.
-    The operation_names_sample is still recorded on the AnomalyCluster
-    for operator context, just not as a fingerprint determinant.
+    `entry_service_set` is the set of services that own *entry-point*
+    spans (root spans, or spans whose parent_span_id is missing from
+    the bundle — i.e. the user-facing edges of the trace). The full
+    set of transitively-included services is recorded on the cluster
+    as metadata but NOT in the fingerprint.
+
+    Why this matters (validation finding from OTel Demo, op002):
+    a 16-service mesh produces high-cardinality service_set
+    combinations as different request paths touch different subsets.
+    291 traces produced 23 distinct service-set combinations →
+    23 abstention clusters from what should have been a much smaller
+    number of distinct trace shapes. Clustering by entry-service
+    collapses this back to the meaningful axis: which edge of the
+    system originated the trace.
+
+    Operation names are also NOT in the fingerprint, for the same
+    high-cardinality reason (path parameters like /checkout/order-12345).
+    The operation_names_sample is still recorded on the cluster as
+    metadata.
     """
-    services = sorted({s.service_name for s in ct.spans if s.service_name})
+    entry_services = sorted(_entry_point_services(ct))
     parts = [
         f"abstention:{abstention.code}",
-        "services=" + ",".join(services),
+        "entry_services=" + ",".join(entry_services),
     ]
     digest = hashlib.sha256("|".join(parts).encode("utf-8")).hexdigest()
     return digest[:16]
+
+
+def _entry_point_services(ct: CorrelatedTelemetry) -> set[str]:
+    """Services that own root spans (parent_span_id is None or points
+    outside the bundle). Falls back to all services if heuristic
+    yields nothing."""
+    span_ids = {s.span_id for s in ct.spans}
+    entries = {
+        s.service_name
+        for s in ct.spans
+        if s.service_name
+        and (not s.parent_span_id or s.parent_span_id not in span_ids)
+    }
+    if entries:
+        return entries
+    # Fallback: if no clear entry-point heuristic matches, use all
+    # services. This preserves the prior behaviour for trace shapes
+    # where every span has a parent that's also in the bundle (rare).
+    return {s.service_name for s in ct.spans if s.service_name}
 
 
 def service_set(ct: CorrelatedTelemetry) -> tuple[str, ...]:

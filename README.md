@@ -205,8 +205,9 @@ arip/
 ├── bin/
 │   ├── arip-demo.sh                   narrated 6-step golden demo
 │   ├── arip-e2e.sh                    unattended CI-style run
-│   ├── jaeger-export-to-bundles.py    operator-side adapter for observe-mode
-│   ├── loki-export-to-logs.py         operator-side adapter for observe-mode
+│   ├── jaeger-export-to-bundles.py    operator-side adapter (Jaeger HTTP API)
+│   ├── tempo-export-to-bundles.py     operator-side adapter (Tempo OTLP JSON)
+│   ├── loki-export-to-logs.py         operator-side adapter (Loki streams)
 │   ├── observe-self-audit.sh          30-sec pre-pilot smoke check
 │   └── run-observe-pilot.sh           single-command observe-mode pilot runner
 └── .github/workflows/      GitHub Actions: investigate + sticky PR comment
@@ -222,14 +223,19 @@ they will move only when there is a concrete user reason.
 
 Pre-release validation:
 
-- **145/145 unit tests pass** (`cd arip-core && uv run pytest`) — includes
-  10 calibration-benchmark scenarios, 15 observation stress scenarios,
-  and 9 real-world ingestion validation tests
+- **153/153 unit tests pass** (`cd arip-core && uv run pytest`) — includes
+  10 calibration-benchmark scenarios, 16 observation stress scenarios,
+  9 real-world ingestion validation tests, and 7 Tempo adapter tests
 - **End-to-end demo** completes in ≤ 16 seconds (success criterion: < 60 s)
 - **4 distinct rule fingerprints** produced reproducibly across runs
 - **Observe-mode** (Phase A) shipped read-only; see
   [docs/PHASE_A_VALIDATION.md](docs/PHASE_A_VALIDATION.md) for the
   stress + real-world ingestion validation passes
+- **Three unknown-OSS-system validations completed** — Jaeger HotROD
+  (op001), CNCF OpenTelemetry Demo (op002), Grafana Tempo
+  (op003). Two real defects caught + fixed during validation. Zero
+  false-high-confidence outcomes across all three. See
+  [docs/UNKNOWN_SYSTEMS_VALIDATION.md](docs/UNKNOWN_SYSTEMS_VALIDATION.md)
 
 Per-release runbook: [RELEASE_CHECKLIST.md](RELEASE_CHECKLIST.md).
 

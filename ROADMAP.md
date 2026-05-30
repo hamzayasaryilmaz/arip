@@ -145,9 +145,17 @@ What ships:
       [docs/OBSERVE_OPERATOR_BRIEFING.md](docs/OBSERVE_OPERATOR_BRIEFING.md),
       [docs/observe-pilot-candidates.md](docs/observe-pilot-candidates.md),
       `bin/run-observe-pilot.sh`
-- [ ] **First real observe-mode pilot (`op001` warm-up + `op002`
-      first engineer)** — operator-coordinated, not buildable
-      autonomously
+- [x] **Three runner-self-pilots against unknown OSS systems
+      completed** — op001 (HotROD), op002 (CNCF OpenTelemetry
+      Demo), op003 (Grafana Tempo). Two real defects caught + fixed
+      (abstention service-set cardinality + Tempo OTLP-JSON
+      adapter). NEW operator adapter: `bin/tempo-export-to-bundles.py`.
+      See [docs/UNKNOWN_SYSTEMS_VALIDATION.md](docs/UNKNOWN_SYSTEMS_VALIDATION.md).
+      **These do NOT count toward Phase 2 entry gate** — explicit
+      NO-HUMAN-OPERATOR disclaimers in each archive.
+- [ ] **First REAL engineer pilot** (`op004` or later — real human,
+      their own CI/staging telemetry) — operator-coordinated, not
+      buildable autonomously. This is the bar for Phase 2 entry gate.
 
 What is **explicitly NOT in Phase A** (will not move without trigger
 in [docs/FUTURE_ARCHITECTURE.md item #11](docs/FUTURE_ARCHITECTURE.md)):

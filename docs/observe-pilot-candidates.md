@@ -125,17 +125,28 @@ For each candidate, the rubric is:
 
 ## Recommended pilot ordering
 
-1. **op001 (warm-up):** OpenTelemetry Demo (candidate A) with one
-   feature flag enabled to inject a known anomaly. Verifies the
-   end-to-end pilot machinery against a controlled real-shape
-   workload. **You can run this without recruiting anyone** — it's
-   a runner-self-pilot to validate the wrapper and templates.
-2. **op002 (first real engineer):** the engineer recruited via
-   [observe-pilot-recruitment.md](observe-pilot-recruitment.md),
+**Updated after iteration:** the original op001-op003 plan was for
+op001 as a single warm-up, op002 as the first real engineer. The
+actual sequence ran differently — three runner-self-pilots against
+three different unknown OSS systems (HotROD, OTel Demo, Tempo) so
+the validation surface area is wider before recruiting a real
+engineer. See [UNKNOWN_SYSTEMS_VALIDATION.md](UNKNOWN_SYSTEMS_VALIDATION.md).
+
+The recommended ordering NOW is:
+
+1. ✓ **op001 (DONE)**: Jaeger HotROD — smallest, fastest unknown-system
+   smoke test. Established the pattern of writing pilot archives
+   with NO-HUMAN-OPERATOR disclaimers for runner-self-pilots.
+2. ✓ **op002 (DONE)**: OpenTelemetry Demo (CNCF reference workload) —
+   exposed the abstention service-set cardinality defect; fix +
+   regression test applied.
+3. ✓ **op003 (DONE)**: Grafana Tempo — exposed the Tempo↔Jaeger
+   wire-format incompatibility; new adapter + 7 unit tests added.
+4. ☐ **op004 (NEXT — first REAL engineer):** the engineer recruited
+   via [observe-pilot-recruitment.md](observe-pilot-recruitment.md),
    running against their own CI/staging telemetry (candidate D).
-   This is the bar.
-3. **op003+:** more engineers, mix of candidate D and the others as
-   useful. Synthesise after op003 per the existing
+   **This is the bar for Phase 2 entry gate.**
+5. ☐ **op005, op006:** more engineers; synthesise after op006 per
    [PILOT_SYNTHESIS_TEMPLATE.md](PILOT_SYNTHESIS_TEMPLATE.md).
 
 The warm-up pilot is explicitly labelled as such — its
