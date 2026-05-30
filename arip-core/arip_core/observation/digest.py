@@ -56,6 +56,27 @@ def render_digest(digest: ObservationDigest) -> str:
 
     if digest.summary is not None:
         _write_summary(out, digest.summary)
+        # If the prerequisite gate fired, surface it prominently
+        # BEFORE any (empty) recurring-patterns sections so the
+        # operator immediately understands why nothing was produced.
+        if digest.summary.prerequisite_failure is not None:
+            pf = digest.summary.prerequisite_failure
+            out.write("## ⚠️  Telemetry prerequisite failed — engine did NOT run\n\n")
+            out.write(f"**{pf.headline}**\n\n")
+            out.write(f"{pf.detail}\n\n")
+            out.write(f"**Next step:** {pf.next_step}\n\n")
+        # Hygiene findings — operator-facing telemetry-gap surface
+        if digest.summary.hygiene_findings:
+            out.write("## Telemetry-hygiene findings\n\n")
+            out.write(
+                "Specific gaps in this telemetry that would let more rules "
+                "fire or strengthen the engine's existing decisions. ARIP "
+                "doesn't make these up — each finding is grounded in what "
+                "the bundle did or didn't contain.\n\n"
+            )
+            for finding in digest.summary.hygiene_findings:
+                out.write(f"- {finding}\n")
+            out.write("\n")
 
     out.write("## Recurring patterns (rule-grounded)\n\n")
     if not digest.rule_clusters:

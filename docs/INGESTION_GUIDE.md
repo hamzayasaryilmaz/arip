@@ -172,6 +172,127 @@ This adapter was added during op003 validation. See
 [observe-pilot-archive/op003/](observe-pilot-archive/op003/) for
 the captured digest and findings.
 
+## Workflow 2.6 — Elasticsearch (traces + logs)
+
+Many teams store BOTH spans and logs in Elasticsearch (especially
+APM Server setups, OTel-via-ES exporter pipelines, or custom
+ingest). ARIP ships two ES adapters that mirror the Jaeger/Tempo
++ Loki pattern:
+
+```bash
+# Step 1 — pull spans from ES (or use a pre-pulled dump)
+python3 bin/elasticsearch-traces-to-bundles.py \
+  --es-url https://es.internal:9200 \
+  --index "apm-*-span-*" \
+  --query '{"range":{"@timestamp":{"gte":"now-1h"}}}' \
+  --basic-auth "$ES_USER:$ES_PASS" \
+  --out /tmp/bundles.jsonl
+
+# Step 2 — pull logs and join by trace_id
+python3 bin/elasticsearch-logs-to-bundles.py \
+  --es-url https://es.internal:9200 \
+  --index "logs-*" \
+  --query '{"range":{"@timestamp":{"gte":"now-1h"}}}' \
+  --basic-auth "$ES_USER:$ES_PASS" \
+  --bundles       /tmp/bundles.jsonl \
+  --out           /tmp/bundles-with-logs.jsonl \
+  --unmatched-out /tmp/unmatched-logs.jsonl
+
+# Step 3 — observe
+uv run arip observe /tmp/bundles-with-logs.jsonl
+```
+
+Field mapping is configurable per environment. Defaults match the
+OTel/APM Server schemas:
+
+```
+--trace-id-field   (default tries: trace_id, trace.id, traceID, traceId)
+--span-id-field    (default tries: span_id, span.id, spanID, spanId)
+--service-field    (default tries: service.name, service_name)
+--operation-field  (default tries: name, operation_name, span.name)
+--timestamp-field  (default tries: @timestamp, timestamp, start_time)
+--duration-field   (default tries: duration_us, duration, elapsed_us)
+--status-field     (default tries: status.code, otel.status_code)
+```
+
+The adapter handles both flat (`service.name` as a literal key) and
+nested (`service: {name: ...}`) representations — ES dynamic
+mapping settings vary across teams.
+
+Alternative input — pre-pulled dump (when you can't expose ES
+directly):
+
+```bash
+# Pull via curl / elasticsearch-dump / your favourite tool
+curl -s "$ES/$INDEX/_search?size=1000" > /tmp/es-dump.json
+
+python3 bin/elasticsearch-traces-to-bundles.py \
+  --in /tmp/es-dump.json \
+  --out /tmp/bundles.jsonl
+```
+
+Three input formats accepted: raw ES response (`{hits: {hits: [...]}}`),
+JSON array of source docs, or NDJSON (one doc per line).
+
+### What if your ES stores only logs, no spans?
+
+Then ARIP cannot help — you need distributed tracing first. ARIP's
+prerequisite gate (Workflow 0 below) will fail-fast on telemetry
+that's logs-only. The honest answer is "add OTel tracing
+instrumentation, then come back". See [ONBOARDING.md](ONBOARDING.md)
+"Minimum viable signals".
+
+## Workflow 0 — Telemetry prerequisite (runs automatically)
+
+Before processing any source, `arip observe` runs a **telemetry
+prerequisite check** on the first non-empty trace. If your source
+doesn't meet the distributed-tracing baseline, the engine aborts
+with a specific reason and an actionable next step instead of
+silently producing nonsense. Three things must hold:
+
+1. At least one span exists
+2. Spans carry a non-empty `trace_id`
+3. Either ≥ 2 services participate OR `parent_span_id` chains exist
+
+Possible failures:
+
+| Code | What it means | What to fix |
+|---|---|---|
+| `no_spans` | The bundle has zero spans | Verify export contains span data, not just logs |
+| `no_trace_id` | Spans exist but lack trace_id | OTel instrumentation issue; check your tracer setup |
+| `no_propagation` | One-service-only with no parent chain | Add traceparent propagation across service boundaries (API gateway is the common culprit) |
+
+You can bypass this gate with `--skip-prerequisite-check` if you
+know your source is legitimately single-service and you've accepted
+the reduced-evidence trade-off. Default is strict.
+
+### Operator-declared coverage assertions
+
+For known production environments, add to your `NormalizationConfig`:
+
+```yaml
+expected_services_per_trace:
+  - frontend
+  - cart
+  - checkout
+  - payment
+
+expected_log_sources:
+  - frontend
+  - payment
+  - inventory
+
+business_key_aliases:
+  order.id:
+    - payment.order_ref      # payment-service renamed it
+    - shipment.order_no      # shipping-service renamed it
+```
+
+When you set these, ARIP's hygiene findings include any service
+missing from the trace, any log source missing from the bundle, and
+will follow ID-translation chains when looking for sibling traces
+(cross-trace correlation).
+
 ## Workflow 3 — GitHub Actions artifact
 
 A CI run that uploads trace exports as an artifact:

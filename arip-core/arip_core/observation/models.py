@@ -6,6 +6,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from ..quality.prerequisite import PrerequisiteFailure
+
 
 @dataclass(frozen=True)
 class CanonicalAnomalyEvent:
@@ -70,6 +72,16 @@ class ObservationSummary:
     quality_band_counts: dict[str, int] = field(default_factory=dict)
     abstention_code_counts: dict[str, int] = field(default_factory=dict)
     rule_match_counts: dict[str, int] = field(default_factory=dict)
+    # Set when the FIRST observed trace failed the telemetry prerequisite
+    # check (no spans / no trace_id / no propagation). Pipeline aborts
+    # the rest of the source rather than running the engine on telemetry
+    # that does not meet the distributed-tracing baseline.
+    prerequisite_failure: PrerequisiteFailure | None = None
+    # Telemetry-hygiene findings derived from the trace bundles ARIP saw.
+    # Populated by hardening checks (service-coverage, log-source
+    # completeness, span-tree gaps). Operator-facing; not consumed by
+    # the engine.
+    hygiene_findings: list[str] = field(default_factory=list)
 
 
 @dataclass

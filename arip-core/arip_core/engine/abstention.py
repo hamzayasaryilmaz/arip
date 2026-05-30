@@ -37,12 +37,57 @@ CONFLICT_TOP_CONFIDENCE_CEILING = 0.85
 CONFLICT_MAX_OVERLAP = 0.30
 
 
+_NEXT_STEPS: dict[str, str] = {
+    "no_primary_trace": (
+        "Bump the OTel SDK flush sleep before ARIP investigates (the trace may "
+        "not have flushed yet). If it persists across runs, your sampling "
+        "config is dropping the trace before Jaeger sees it — check tail-based "
+        "sampling rules in the OTel Collector. See docs/ONBOARDING.md."
+    ),
+    "empty_telemetry": (
+        "Verify your telemetry pipeline is flowing during the failure window: "
+        "service emitting OTel? Collector receiving? Backend (Jaeger/Tempo) "
+        "accepting? `arip preflight` will show you the per-signal coverage."
+    ),
+    "no_rule_matched": (
+        "ARIP has rules for 5 specific failure shapes (retry_storm, "
+        "db_pool_exhaustion, downstream_error, concurrent_modification, "
+        "latency_vs_db). This failure didn't match any. Either the underlying "
+        "issue is genuinely outside the 5 rules' scope, OR your telemetry is "
+        "missing signals one of them needs (e.g. retry.attempt attribute, "
+        "db.pool.* stats). See docs/INVESTIGATION_RULES.md per-rule contracts."
+    ),
+    "weak_evidence": (
+        "A rule almost fired but ARIP needs ≥ 2 distinct evidence kinds "
+        "(spans + logs, or spans + span_events) to promote it past abstention. "
+        "Most likely cause: spans are present but correlated logs aren't joined "
+        "into the bundle. Add log_trace_correlation: run "
+        "bin/loki-export-to-logs.py (or the Elasticsearch equivalent) to join "
+        "logs by trace_id. See docs/INGESTION_GUIDE.md Workflow 2."
+    ),
+    "conflicting_hypotheses": (
+        "Two rules fired with similar confidence on disjoint evidence. ARIP "
+        "won't pick one — that would risk sending you in the wrong direction. "
+        "Investigate the candidates manually; the right answer is probably "
+        "either both (a cascade) or neither (a third unidentified cause). "
+        "See docs/abstention-gallery.md."
+    ),
+}
+
+
 @dataclass
 class AbstentionReason:
-    code: str  # 'no_primary_trace' | 'empty_telemetry' | 'no_rule_matched' | 'weak_evidence'
+    code: str  # 'no_primary_trace' | 'empty_telemetry' | 'no_rule_matched' | 'weak_evidence' | 'conflicting_hypotheses'
     headline: str
     detail: str
     diagnostics: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def next_step(self) -> str:
+        """Operator-facing actionable hint for closing the gap that
+        produced this abstention. Templated per abstention code so
+        it's consistent across reports."""
+        return _NEXT_STEPS.get(self.code, "")
 
 
 def evaluate_abstention(

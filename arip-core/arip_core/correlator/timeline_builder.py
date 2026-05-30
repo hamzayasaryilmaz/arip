@@ -69,15 +69,22 @@ class TimelineBuilder:
         related_ids: list[str] = []
         related_spans: list[Span] = []
         if order_id:
+            # Query EVERY configured business_key attribute (canonical +
+            # aliases). Handles ID-translation chains where the same
+            # logical key has different names across services.
+            from ..canonical.signals import Signals
+
+            tag_attrs = Signals(self.config).all_business_key_attrs() or ["order.id"]
             for svc in ("payment-service", "inventory-service"):
-                try:
-                    found = self.jaeger.find_traces_by_tag(svc, "order.id", order_id)
-                except Exception as exc:
-                    log.warning("find_traces_by_tag(%s) failed: %s", svc, exc)
-                    continue
-                for tid in found:
-                    if tid != failure.trace_id and tid not in related_ids:
-                        related_ids.append(tid)
+                for tag_attr in tag_attrs:
+                    try:
+                        found = self.jaeger.find_traces_by_tag(svc, tag_attr, order_id)
+                    except Exception as exc:
+                        log.warning("find_traces_by_tag(%s, %s) failed: %s", svc, tag_attr, exc)
+                        continue
+                    for tid in found:
+                        if tid != failure.trace_id and tid not in related_ids:
+                            related_ids.append(tid)
         for tid in related_ids:
             try:
                 related_spans.extend(self.jaeger.get_trace(tid))

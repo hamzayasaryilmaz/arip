@@ -6,7 +6,67 @@ the project uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
+### Added (robustness pass — telemetry hygiene + ES support)
+
+- **Telemetry prerequisite gate**
+  (`arip_core/quality/prerequisite.py`). `arip observe` now fail-fasts
+  on telemetry that's not distributed-tracing-shaped (`no_spans`,
+  `no_trace_id`, `no_propagation`) with a specific operator next-step
+  hint instead of producing nonsense. Strict by default;
+  `--skip-prerequisite-check` opt-out available.
+- **Telemetry hygiene findings**
+  (`arip_core/quality/hygiene.py`). Every observe-mode run now
+  surfaces concrete gaps the operator can close:
+  - Span-tree gaps (orphan spans → likely uninstrumented service)
+  - Service-coverage assertion (operator-declared
+    `expected_services_per_trace` not all present)
+  - Log-source completeness (`expected_log_sources` missing)
+  - Business-key propagation gap (entry-point has key but downstream
+    doesn't → cross-trace correlation will break for this request)
+- **Business-key alias chains** (`NormalizationConfig.business_key_aliases`).
+  Handles ID translation across services — operator declares e.g.
+  `order.id: [payment.order_ref, shipment.order_no]` and ARIP follows
+  any of those when doing cross-trace correlation.
+- **Abstention next-step hints** (`AbstentionReason.next_step` property).
+  Each of the 5 abstention codes now carries a templated, actionable
+  next-step pointing at the specific telemetry-hygiene action that
+  would let the rule fire.
+- **Elasticsearch operator adapters**:
+  `bin/elasticsearch-traces-to-bundles.py` (spans/APM Server) and
+  `bin/elasticsearch-logs-to-bundles.py` (logs joined by trace_id).
+  Configurable field mapping; handles flat + nested ES schemas;
+  three input formats (raw ES response, JSON array, NDJSON); both
+  live ES query and pre-pulled file modes.
+- **Pipeline-wide cross-trace lookup uses aliases**
+  (`TimelineBuilder.build`). When asking Jaeger for sibling traces,
+  ARIP now queries every configured business_key attribute + alias,
+  not just the first one.
+- **Digest renders prerequisite failure + hygiene findings**
+  prominently — operator sees gaps at the top of the digest, before
+  any (empty) recurring-patterns table.
+
+### Added (test coverage)
+
+- 9 tests for the prerequisite gate (`test_prerequisite.py`)
+- 14 tests for hygiene findings (`test_hygiene.py`)
+- 10 tests for Elasticsearch adapters (`test_es_adapter.py`)
+- Tests cover the full failure matrix (no_spans, no_trace_id,
+  no_propagation), per-finding cases (service coverage, log source,
+  alias-based business key), and ES adapter behaviour (NDJSON
+  fallback, nested fields, OTLP status codes, epoch_millis
+  timestamps, unmatched-log surfacing).
+
+### Fixed
+
+- ES logs adapter previously silently dropped logs whose trace_id
+  didn't match any bundle (matched by ID-presence, not by
+  trace-existence). Now they go to `--unmatched-out` like logs with
+  no trace_id at all.
+- ES adapters' NDJSON parsing was masked by an earlier JSON-decode
+  attempt that consumed the input on failure. Fall-through pattern
+  added.
+
+### Added (previously)
 
 - Cypress test framework support (`arip_core/collector/cypress_listener.py`).
   CLI `arip investigate` auto-detects Playwright vs Cypress via the

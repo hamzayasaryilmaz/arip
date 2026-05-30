@@ -78,7 +78,9 @@ def test_jaeger_export_converts_and_observes(tmp_path: Path) -> None:
     # Observation against the converted bundles produces a clustering
     # result with at least one rule cluster (the retry_storm trace).
     store = ObservationStore(tmp_path / "obs.db")
-    summary = observe(source=JsonlTraceSource(bundles), store=store, budget=100)
+    summary = observe(
+        source=JsonlTraceSource(bundles), store=store, budget=100, skip_prerequisite_check=True
+    )
     assert summary.events_new == 3
 
     rule_clusters = store.list_clusters(kind="rule")
@@ -122,7 +124,7 @@ def test_jaeger_path_parameter_operation_name_clusters_safely(tmp_path: Path) ->
     _run_tool(JAEGER_TOOL, "--in", str(export), "--out", str(bundles))
 
     store = ObservationStore(tmp_path / "obs.db")
-    observe(source=JsonlTraceSource(bundles), store=store, budget=100)
+    observe(source=JsonlTraceSource(bundles), store=store, budget=100, skip_prerequisite_check=True)
 
     # The downstream_error abstention or rule cluster should NOT
     # explode across the path-parameter variations.
@@ -192,7 +194,9 @@ def test_loki_join_adds_logs_to_existing_bundles(tmp_path: Path) -> None:
 
     # Now observe the joined bundles.
     store = ObservationStore(tmp_path / "obs.db")
-    summary = observe(source=JsonlTraceSource(bundles_b), store=store, budget=100)
+    summary = observe(
+        source=JsonlTraceSource(bundles_b), store=store, budget=100, skip_prerequisite_check=True
+    )
     assert summary.events_new == 3
 
 
@@ -246,7 +250,12 @@ def test_gha_artifact_jsonl_layout_observes_correctly(tmp_path: Path) -> None:
     assert bundles_jsonl.exists()
 
     store = ObservationStore(tmp_path / "obs.db")
-    summary = observe(source=JsonlTraceSource(bundles_jsonl), store=store, budget=100)
+    summary = observe(
+        source=JsonlTraceSource(bundles_jsonl),
+        store=store,
+        budget=100,
+        skip_prerequisite_check=True,
+    )
     assert summary.events_new == len(bundles)
 
 
@@ -268,7 +277,7 @@ def test_gha_artifact_nested_directory_observes_correctly(tmp_path: Path) -> Non
     # With default glob "*.json", top level matches nothing.
     store = ObservationStore(tmp_path / "obs.db")
     top_level = DirectoryTraceSource(extract_dir / "traces", glob="*.json")
-    summary_top = observe(source=top_level, store=store, budget=100)
+    summary_top = observe(source=top_level, store=store, budget=100, skip_prerequisite_check=True)
     assert summary_top.events_new == 0, (
         "default '*.json' glob should not recurse into subdirectories"
     )
@@ -276,7 +285,7 @@ def test_gha_artifact_nested_directory_observes_correctly(tmp_path: Path) -> Non
     # The operator workflow for nested layouts is to use `**/*.json`.
     store2 = ObservationStore(tmp_path / "obs2.db")
     recursive = DirectoryTraceSource(extract_dir / "traces", glob="**/*.json")
-    summary_rec = observe(source=recursive, store=store2, budget=100)
+    summary_rec = observe(source=recursive, store=store2, budget=100, skip_prerequisite_check=True)
     assert summary_rec.events_new == len(bundles)
 
 
@@ -299,7 +308,7 @@ def test_file_rotation_does_not_silently_drop_new_writes(tmp_path: Path) -> None
     # Step 1: full ingestion sets cursor to the file's full length.
     store = ObservationStore(tmp_path / "obs.db")
     src = JsonlTraceSource(bundles_path)
-    observe(source=src, store=store, budget=100)
+    observe(source=src, store=store, budget=100, skip_prerequisite_check=True)
     cursor_after_first = store.load_cursor(src.name)
     assert cursor_after_first is not None
     assert int(cursor_after_first) == len(bundles_text)
@@ -313,7 +322,9 @@ def test_file_rotation_does_not_silently_drop_new_writes(tmp_path: Path) -> None
     # Step 3: observe again. Cursor is past new EOF; current behaviour
     # is silent skip. This test PINS that behaviour so it changes
     # deliberately, not accidentally.
-    s2 = observe(source=JsonlTraceSource(bundles_path), store=store, budget=100)
+    s2 = observe(
+        source=JsonlTraceSource(bundles_path), store=store, budget=100, skip_prerequisite_check=True
+    )
     assert s2.events_new == 0, (
         "Phase A's documented behaviour: file rotation without source "
         "URI change results in silent skip. Operator workflow must use "
@@ -341,7 +352,12 @@ def test_partial_gzip_does_not_crash(tmp_path: Path) -> None:
     # crash on the underlying gzip error — the observation pipeline
     # itself is what we assert about.
     try:
-        summary = observe(source=JsonlTraceSource(gz_partial), store=store, budget=100)
+        summary = observe(
+            source=JsonlTraceSource(gz_partial),
+            store=store,
+            budget=100,
+            skip_prerequisite_check=True,
+        )
         outcome = ("ok", summary.events_new)
     except Exception as exc:  # pragma: no cover - documenting behaviour
         outcome = ("raised", repr(exc))
@@ -372,7 +388,9 @@ def test_realistic_export_digest_is_actionable(tmp_path: Path) -> None:
     )
 
     store = ObservationStore(tmp_path / "obs.db")
-    summary = observe(source=JsonlTraceSource(bundles_b), store=store, budget=100)
+    summary = observe(
+        source=JsonlTraceSource(bundles_b), store=store, budget=100, skip_prerequisite_check=True
+    )
 
     digest = build_digest(store, summary=summary)
     md = render_digest(digest)

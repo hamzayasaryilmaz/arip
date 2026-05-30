@@ -63,15 +63,37 @@ class Signals:
 
     def business_key_for(self, span: Span) -> str | None:
         """Return the business-key value (e.g. order_id) on this span,
-        searching the configured attribute names in priority order."""
+        searching the configured attribute names AND their aliases.
+
+        Aliases handle ID translation chains — e.g. when frontend
+        emits `order.id` but payment service emits `payment.order_ref`
+        carrying the same logical value. Operator declares this in
+        `business_key_aliases` config; ARIP then treats either spelling
+        as a hit for the same logical key."""
         for attr in self.config.business_key_attrs:
             v = span.attributes.get(attr)
             if v is not None:
                 return str(v)
+            # Check aliases for this canonical key
+            for alias in self.config.business_key_aliases.get(attr, []):
+                aliased = span.attributes.get(alias)
+                if aliased is not None:
+                    return str(aliased)
         return None
 
     def business_keys_enabled(self) -> bool:
         return bool(self.config.business_key_attrs)
+
+    def all_business_key_attrs(self) -> list[str]:
+        """Every attribute name (canonical + aliases) that may carry
+        a business key. Used by cross-trace lookup when ARIP needs to
+        ask the telemetry backend 'do you have a sibling trace with
+        ANY of these tags set to X?'."""
+        out: list[str] = []
+        for attr in self.config.business_key_attrs:
+            out.append(attr)
+            out.extend(self.config.business_key_aliases.get(attr, []))
+        return out
 
     # ─── Retry signals ───────────────────────────────────────────────
 

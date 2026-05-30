@@ -243,5 +243,7 @@ def test_tempo_adapter_observed_e2e_via_jsonl_source(tmp_path: Path) -> None:
     _run_tool("--in", str(src), "--out", str(dst))
 
     store = ObservationStore(tmp_path / "obs.db")
-    summary = observe(source=JsonlTraceSource(dst), store=store, budget=10)
+    summary = observe(
+        source=JsonlTraceSource(dst), store=store, budget=10, skip_prerequisite_check=True
+    )
     assert summary.events_new == 1

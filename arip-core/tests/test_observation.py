@@ -131,14 +131,14 @@ def test_idempotent_ingestion_same_file_run_twice(tmp_path: Path) -> None:
     store = ObservationStore(tmp_path / "observation.db")
     source = JsonlTraceSource(jsonl)
 
-    s1 = observe(source=source, store=store, budget=10)
+    s1 = observe(source=source, store=store, budget=10, skip_prerequisite_check=True)
     assert s1.events_new == 3
     assert s1.events_skipped_idempotent == 0
 
     # Re-running with the same cursor would normally skip ingested lines.
     # To prove idempotency, we forcibly reset the cursor and re-ingest:
     store.save_cursor(source.name, "0")
-    s2 = observe(source=source, store=store, budget=10)
+    s2 = observe(source=source, store=store, budget=10, skip_prerequisite_check=True)
     assert s2.events_new == 0
     assert s2.events_skipped_idempotent == 3
 
@@ -154,12 +154,12 @@ def test_cursor_resumes_partial_run(tmp_path: Path) -> None:
     source = JsonlTraceSource(jsonl)
 
     # First run: budget of 2 — only first two are ingested.
-    s1 = observe(source=source, store=store, budget=2)
+    s1 = observe(source=source, store=store, budget=2, skip_prerequisite_check=True)
     assert s1.traces_observed == 2
     assert s1.events_new == 2
 
     # Second run: continues from cursor — picks up the remaining 3.
-    s2 = observe(source=source, store=store, budget=10)
+    s2 = observe(source=source, store=store, budget=10, skip_prerequisite_check=True)
     assert s2.traces_observed == 3
     assert s2.events_new == 3
 
@@ -177,7 +177,7 @@ def test_jsonl_gz_source(tmp_path: Path) -> None:
         gout.write(raw.read_bytes())
 
     store = ObservationStore(tmp_path / "observation.db")
-    s = observe(source=JsonlTraceSource(gz), store=store, budget=10)
+    s = observe(source=JsonlTraceSource(gz), store=store, budget=10, skip_prerequisite_check=True)
     assert s.events_new == 1
 
 
@@ -193,13 +193,13 @@ def test_directory_source(tmp_path: Path) -> None:
 
     store = ObservationStore(tmp_path / "observation.db")
     source = DirectoryTraceSource(bundle_dir)
-    s = observe(source=source, store=store, budget=10)
+    s = observe(source=source, store=store, budget=10, skip_prerequisite_check=True)
     assert s.events_new == 3
 
     # Adding a new file is picked up by the next run.
     new_b = _retry_storm_bundle("trace-d-3", captured_at=NOW + timedelta(minutes=3))
     (bundle_dir / "03.json").write_text(json.dumps(new_b))
-    s2 = observe(source=source, store=store, budget=10)
+    s2 = observe(source=source, store=store, budget=10, skip_prerequisite_check=True)
     assert s2.events_new == 1
 
 
@@ -215,7 +215,7 @@ def test_retry_storm_cluster_recurrence(tmp_path: Path) -> None:
     _write_jsonl(jsonl, bundles)
 
     store = ObservationStore(tmp_path / "observation.db")
-    observe(source=JsonlTraceSource(jsonl), store=store, budget=10)
+    observe(source=JsonlTraceSource(jsonl), store=store, budget=10, skip_prerequisite_check=True)
 
     rule_clusters = store.list_clusters(kind="rule")
     assert len(rule_clusters) == 1, "all four traces should share one fingerprint"
@@ -233,7 +233,7 @@ def test_abstention_cluster_recorded(tmp_path: Path) -> None:
     _write_jsonl(jsonl, bundles)
 
     store = ObservationStore(tmp_path / "observation.db")
-    observe(source=JsonlTraceSource(jsonl), store=store, budget=10)
+    observe(source=JsonlTraceSource(jsonl), store=store, budget=10, skip_prerequisite_check=True)
 
     abstention_clusters = store.list_clusters(kind="abstention")
     assert len(abstention_clusters) >= 1
@@ -258,7 +258,7 @@ def test_quality_band_propagates(tmp_path: Path) -> None:
     _write_jsonl(jsonl, [_retry_storm_bundle("trace-q", captured_at=NOW)])
 
     store = ObservationStore(tmp_path / "observation.db")
-    observe(source=JsonlTraceSource(jsonl), store=store, budget=10)
+    observe(source=JsonlTraceSource(jsonl), store=store, budget=10, skip_prerequisite_check=True)
 
     dist = store.quality_band_distribution()
     assert sum(dist.values()) == 1
@@ -276,7 +276,9 @@ def test_digest_contains_rule_cluster_and_disclaimer(tmp_path: Path) -> None:
     _write_jsonl(jsonl, bundles)
 
     store = ObservationStore(tmp_path / "observation.db")
-    summary = observe(source=JsonlTraceSource(jsonl), store=store, budget=10)
+    summary = observe(
+        source=JsonlTraceSource(jsonl), store=store, budget=10, skip_prerequisite_check=True
+    )
 
     digest = build_digest(store, window_label="test", summary=summary)
     md = render_digest(digest)
@@ -309,7 +311,7 @@ def test_source_never_mutates_input_file(tmp_path: Path) -> None:
     mtime_before = jsonl.stat().st_mtime
 
     store = ObservationStore(tmp_path / "observation.db")
-    observe(source=JsonlTraceSource(jsonl), store=store, budget=10)
+    observe(source=JsonlTraceSource(jsonl), store=store, budget=10, skip_prerequisite_check=True)
 
     assert jsonl.read_bytes() == before, "source file must not be mutated"
     assert jsonl.stat().st_mtime == pytest.approx(mtime_before, abs=0.01)
@@ -329,7 +331,9 @@ def test_mixed_anomaly_and_ok_traces(tmp_path: Path) -> None:
     _write_jsonl(jsonl, bundles)
 
     store = ObservationStore(tmp_path / "observation.db")
-    summary = observe(source=JsonlTraceSource(jsonl), store=store, budget=10)
+    summary = observe(
+        source=JsonlTraceSource(jsonl), store=store, budget=10, skip_prerequisite_check=True
+    )
     assert summary.events_new == 4
 
     rule_clusters = store.list_clusters(kind="rule")
@@ -351,8 +355,8 @@ def test_cursor_is_persisted_per_source(tmp_path: Path) -> None:
     store = ObservationStore(tmp_path / "observation.db")
     src_a = JsonlTraceSource(jsonl_a)
     src_b = JsonlTraceSource(jsonl_b)
-    observe(source=src_a, store=store, budget=10)
-    observe(source=src_b, store=store, budget=10)
+    observe(source=src_a, store=store, budget=10, skip_prerequisite_check=True)
+    observe(source=src_b, store=store, budget=10, skip_prerequisite_check=True)
 
     assert store.load_cursor(src_a.name) is not None
     assert store.load_cursor(src_b.name) is not None

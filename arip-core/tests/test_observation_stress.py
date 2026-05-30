@@ -41,7 +41,9 @@ def test_burst_outage_collapses_to_one_rule_cluster(tmp_path: Path) -> None:
     write_jsonl(jsonl, bundles)
 
     store = ObservationStore(tmp_path / "obs.db")
-    summary = observe(source=JsonlTraceSource(jsonl), store=store, budget=500)
+    summary = observe(
+        source=JsonlTraceSource(jsonl), store=store, budget=500, skip_prerequisite_check=True
+    )
     assert summary.events_new == 200
 
     rule_clusters = store.list_clusters(kind="rule")
@@ -67,7 +69,7 @@ def test_cascading_failure_produces_distinct_rule_clusters(tmp_path: Path) -> No
     jsonl = tmp_path / "cascading.jsonl"
     write_jsonl(jsonl, cascading_failure_traces(n=50))
     store = ObservationStore(tmp_path / "obs.db")
-    observe(source=JsonlTraceSource(jsonl), store=store, budget=200)
+    observe(source=JsonlTraceSource(jsonl), store=store, budget=200, skip_prerequisite_check=True)
 
     rule_clusters = store.list_clusters(kind="rule")
     rule_ids = {c.rule_id for c in rule_clusters}
@@ -100,7 +102,7 @@ def test_orphan_spans_do_not_pollute_rule_clusters(tmp_path: Path) -> None:
     write_jsonl(jsonl, bundles)
 
     store = ObservationStore(tmp_path / "obs.db")
-    observe(source=JsonlTraceSource(jsonl), store=store, budget=50)
+    observe(source=JsonlTraceSource(jsonl), store=store, budget=50, skip_prerequisite_check=True)
 
     rule_clusters = store.list_clusters(kind="rule")
     abstention_clusters = store.list_clusters(kind="abstention")
@@ -129,11 +131,15 @@ def test_truncated_jsonl_does_not_crash_or_loop(tmp_path: Path) -> None:
     write_truncated_jsonl(jsonl, bundles)
 
     store = ObservationStore(tmp_path / "obs.db")
-    s1 = observe(source=JsonlTraceSource(jsonl), store=store, budget=100)
+    s1 = observe(
+        source=JsonlTraceSource(jsonl), store=store, budget=100, skip_prerequisite_check=True
+    )
     # All 10 valid lines should be processed.
     assert s1.events_new == 10
     # Cursor advanced; second run is a no-op (still no valid new line).
-    s2 = observe(source=JsonlTraceSource(jsonl), store=store, budget=100)
+    s2 = observe(
+        source=JsonlTraceSource(jsonl), store=store, budget=100, skip_prerequisite_check=True
+    )
     assert s2.traces_observed == 0
     assert s2.events_new == 0
 
@@ -149,10 +155,14 @@ def test_cursor_resumes_after_simulated_crash(tmp_path: Path) -> None:
 
     store = ObservationStore(tmp_path / "obs.db")
     # First run: process only 7, simulating a crash via budget.
-    s1 = observe(source=JsonlTraceSource(jsonl), store=store, budget=7)
+    s1 = observe(
+        source=JsonlTraceSource(jsonl), store=store, budget=7, skip_prerequisite_check=True
+    )
     assert s1.events_new == 7
     # "Restart" with the same store: cursor picks up where we left off.
-    s2 = observe(source=JsonlTraceSource(jsonl), store=store, budget=100)
+    s2 = observe(
+        source=JsonlTraceSource(jsonl), store=store, budget=100, skip_prerequisite_check=True
+    )
     assert s2.events_new == 13
     # Total recurrence equals input.
     total = sum(c.recurrence_count for c in store.list_clusters(kind="rule"))
@@ -170,11 +180,11 @@ def test_idempotent_under_replay(tmp_path: Path) -> None:
 
     store = ObservationStore(tmp_path / "obs.db")
     source = JsonlTraceSource(jsonl)
-    s1 = observe(source=source, store=store, budget=100)
+    s1 = observe(source=source, store=store, budget=100, skip_prerequisite_check=True)
     assert s1.events_new == 30
 
     store.save_cursor(source.name, "0")
-    s2 = observe(source=source, store=store, budget=100)
+    s2 = observe(source=source, store=store, budget=100, skip_prerequisite_check=True)
     assert s2.events_new == 0
     assert s2.events_skipped_idempotent == 30
     # Cluster recurrence unchanged.
@@ -197,10 +207,14 @@ def test_gzipped_archive_processes_same_as_plain(tmp_path: Path) -> None:
         out.write(plain.read_bytes())
 
     store_plain = ObservationStore(tmp_path / "plain.db")
-    s_plain = observe(source=JsonlTraceSource(plain), store=store_plain, budget=100)
+    s_plain = observe(
+        source=JsonlTraceSource(plain), store=store_plain, budget=100, skip_prerequisite_check=True
+    )
 
     store_gz = ObservationStore(tmp_path / "gz.db")
-    s_gz = observe(source=JsonlTraceSource(gz), store=store_gz, budget=100)
+    s_gz = observe(
+        source=JsonlTraceSource(gz), store=store_gz, budget=100, skip_prerequisite_check=True
+    )
 
     assert s_plain.events_new == s_gz.events_new == 15
     plain_rec = sum(c.recurrence_count for c in store_plain.list_clusters(kind="rule"))
@@ -218,7 +232,7 @@ def test_retention_pruning_drops_events_but_keeps_clusters(tmp_path: Path) -> No
     write_jsonl(jsonl, burst_outage_traces(n=40))
 
     store = ObservationStore(tmp_path / "obs.db")
-    observe(source=JsonlTraceSource(jsonl), store=store, budget=100)
+    observe(source=JsonlTraceSource(jsonl), store=store, budget=100, skip_prerequisite_check=True)
     before_clusters = store.list_clusters(kind="rule")
     assert before_clusters
     before_recurrence = before_clusters[0].recurrence_count
@@ -243,13 +257,13 @@ def test_storage_growth_is_bounded_per_run(tmp_path: Path) -> None:
     store = ObservationStore(store_path)
     source = JsonlTraceSource(jsonl)
 
-    observe(source=source, store=store, budget=100)
+    observe(source=source, store=store, budget=100, skip_prerequisite_check=True)
     size_after_first = store_path.stat().st_size
 
     # Force replay 5 more times.
     for _ in range(5):
         store.save_cursor(source.name, "0")
-        observe(source=source, store=store, budget=100)
+        observe(source=source, store=store, budget=100, skip_prerequisite_check=True)
     size_after_replays = store_path.stat().st_size
 
     # Replays may bump SQLite page allocation slightly but should not
@@ -269,7 +283,9 @@ def test_digest_under_mixed_noise_is_bounded_in_size(tmp_path: Path) -> None:
     jsonl = tmp_path / "noise.jsonl"
     write_jsonl(jsonl, mixed_noise_traces(n=200))
     store = ObservationStore(tmp_path / "obs.db")
-    summary = observe(source=JsonlTraceSource(jsonl), store=store, budget=500)
+    summary = observe(
+        source=JsonlTraceSource(jsonl), store=store, budget=500, skip_prerequisite_check=True
+    )
 
     digest = build_digest(store, summary=summary)
     rule_clusters = list(digest.rule_clusters)
@@ -297,7 +313,7 @@ def test_digest_min_recurrence_filters_out_one_offs(tmp_path: Path) -> None:
     jsonl = tmp_path / "mixed.jsonl"
     write_jsonl(jsonl, mixed_noise_traces(n=80))
     store = ObservationStore(tmp_path / "obs.db")
-    observe(source=JsonlTraceSource(jsonl), store=store, budget=200)
+    observe(source=JsonlTraceSource(jsonl), store=store, budget=200, skip_prerequisite_check=True)
 
     all_clusters = store.list_clusters(kind="any", min_recurrence=1)
     filtered = store.list_clusters(kind="any", min_recurrence=5)
@@ -317,7 +333,7 @@ def test_healthy_traces_alone_produce_no_rule_clusters(tmp_path: Path) -> None:
     jsonl = tmp_path / "healthy.jsonl"
     write_jsonl(jsonl, [healthy_trace(f"ok-{i}") for i in range(30)])
     store = ObservationStore(tmp_path / "obs.db")
-    observe(source=JsonlTraceSource(jsonl), store=store, budget=100)
+    observe(source=JsonlTraceSource(jsonl), store=store, budget=100, skip_prerequisite_check=True)
 
     assert store.list_clusters(kind="rule") == []
     abstentions = store.list_clusters(kind="abstention")
@@ -341,7 +357,7 @@ def test_low_quality_telemetry_does_not_promote_rule_clusters(tmp_path: Path) ->
     jsonl = tmp_path / "lowq.jsonl"
     write_jsonl(jsonl, [orphan_span_trace(f"orph-{i}") for i in range(25)])
     store = ObservationStore(tmp_path / "obs.db")
-    observe(source=JsonlTraceSource(jsonl), store=store, budget=100)
+    observe(source=JsonlTraceSource(jsonl), store=store, budget=100, skip_prerequisite_check=True)
 
     rule_clusters = store.list_clusters(kind="rule")
     assert rule_clusters == []
@@ -387,7 +403,9 @@ def test_pipeline_handles_empty_cursor_on_fresh_source(tmp_path: Path) -> None:
 
     store = ObservationStore(tmp_path / "obs.db")
     # Should not raise.
-    summary = observe(source=_EmptyCursorSource(), store=store, budget=10)
+    summary = observe(
+        source=_EmptyCursorSource(), store=store, budget=10, skip_prerequisite_check=True
+    )
     assert summary.traces_observed == 1
     assert summary.events_new == 0
     # Cursor should remain None — save was correctly skipped, not
@@ -463,7 +481,7 @@ def test_abstention_fingerprint_collapses_high_service_count(tmp_path: Path) -> 
     write_jsonl(jsonl, bundles)
 
     store = ObservationStore(tmp_path / "obs.db")
-    observe(source=JsonlTraceSource(jsonl), store=store, budget=100)
+    observe(source=JsonlTraceSource(jsonl), store=store, budget=100, skip_prerequisite_check=True)
 
     abstention_clusters = store.list_clusters(kind="abstention")
     # All 50 traces share entry-point service "frontend" → one cluster.
@@ -486,7 +504,9 @@ def test_fingerprint_determinism_across_runs(tmp_path: Path) -> None:
     fps_per_run: list[set[str]] = []
     for n in range(2):
         store = ObservationStore(tmp_path / f"obs-{n}.db")
-        observe(source=JsonlTraceSource(jsonl), store=store, budget=100)
+        observe(
+            source=JsonlTraceSource(jsonl), store=store, budget=100, skip_prerequisite_check=True
+        )
         clusters = store.list_clusters(kind="any")
         fps_per_run.append({c.fingerprint for c in clusters})
 

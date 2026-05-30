@@ -205,11 +205,13 @@ arip/
 ├── bin/
 │   ├── arip-demo.sh                   narrated 6-step golden demo
 │   ├── arip-e2e.sh                    unattended CI-style run
-│   ├── jaeger-export-to-bundles.py    operator-side adapter (Jaeger HTTP API)
-│   ├── tempo-export-to-bundles.py     operator-side adapter (Tempo OTLP JSON)
-│   ├── loki-export-to-logs.py         operator-side adapter (Loki streams)
-│   ├── observe-self-audit.sh          30-sec pre-pilot smoke check
-│   └── run-observe-pilot.sh           single-command observe-mode pilot runner
+│   ├── jaeger-export-to-bundles.py        operator-side adapter (Jaeger HTTP API)
+│   ├── tempo-export-to-bundles.py         operator-side adapter (Tempo OTLP JSON)
+│   ├── loki-export-to-logs.py             operator-side adapter (Loki streams)
+│   ├── elasticsearch-traces-to-bundles.py operator-side adapter (ES + APM Server)
+│   ├── elasticsearch-logs-to-bundles.py   operator-side adapter (ES logs join)
+│   ├── observe-self-audit.sh              30-sec pre-pilot smoke check
+│   └── run-observe-pilot.sh               single-command observe-mode pilot runner
 └── .github/workflows/      GitHub Actions: investigate + sticky PR comment
 ```
 
@@ -223,12 +225,25 @@ they will move only when there is a concrete user reason.
 
 Pre-release validation:
 
-- **169/169 unit tests pass** (`cd arip-core && uv run pytest`) — includes
-  10 calibration-benchmark scenarios, 16 observation stress scenarios,
-  9 real-world ingestion validation tests, 7 Tempo adapter tests, and
-  16 Cypress listener tests
+- **223/223 unit tests pass** (`cd arip-core && uv run pytest`) — includes
+  10 calibration-benchmark scenarios, 16+ observation stress scenarios,
+  9 real-world ingestion validation tests, 7 Tempo adapter tests,
+  16 Cypress + 9 Playwright listener tests, 12 markdown-renderer tests,
+  9 prerequisite-gate tests, 14 hygiene tests, and 10 Elasticsearch
+  adapter tests
 - **Investigation mode supports Playwright AND Cypress** — `arip
   investigate <report.json>` auto-detects the framework
+- **Telemetry prerequisite gate** — `arip observe` fail-fasts when the
+  source isn't distributed-tracing-shaped, with a specific operator
+  next-step instead of producing nonsense
+- **Telemetry hygiene findings** — every digest surfaces span-tree
+  gaps, missing expected services/log sources, and broken
+  business-key propagation
+- **Business-key alias chains** — `NormalizationConfig` supports
+  `business_key_aliases` for ID-translation across services
+- **Elasticsearch adapters** — `bin/elasticsearch-traces-to-bundles.py`
+  and `bin/elasticsearch-logs-to-bundles.py` for teams using ES
+  instead of (or alongside) Jaeger/Tempo/Loki
 - **GitHub Actions template for observe-mode** —
   [`.github/workflows/arip-observe.yml.example`](.github/workflows/arip-observe.yml.example)
   for scheduled weekly anomaly digests

@@ -87,6 +87,32 @@ class NormalizationConfig:
     # (e.g. "demo", "production-eu", "tenant-foo").
     name: str = "default"
 
+    # ─── Telemetry-hygiene assertions (operator-declared) ────────────
+    # Empty lists = check disabled (default). Populate per-environment
+    # to make ARIP loudly flag when the expected coverage isn't there.
+
+    # Services expected to appear in EVERY trace this config sees.
+    # Example: ["frontend", "cart", "checkout", "payment"] for the
+    # checkout flow. Missing service in a trace → hygiene finding.
+    expected_services_per_trace: list[str] = field(default_factory=list)
+
+    # Services expected to emit logs joined into the bundle.
+    # Example: ["payment", "inventory"]. Missing service from the
+    # log set → hygiene finding (likely Loki/ES query gap or service
+    # isn't logging).
+    expected_log_sources: list[str] = field(default_factory=list)
+
+    # Business-key aliases for ID-translation chains.
+    # Example: order_id renamed mid-flight:
+    #   business_key_aliases:
+    #     order.id: [payment.order_ref, shipment.order_no]
+    # ARIP will then treat a span carrying payment.order_ref as
+    # carrying the same logical key as the original order.id when
+    # walking cross-trace correlation. Empty dict = no aliases
+    # (default; the rest of the chain depends on services emitting
+    # the original key).
+    business_key_aliases: dict[str, list[str]] = field(default_factory=dict)
+
     # ─────────────────────────────────────────────────────────────────
 
     def signals_summary(self) -> dict[str, Any]:
@@ -161,6 +187,18 @@ def _config_from_dict(data: dict[str, Any], source_name: str) -> NormalizationCo
     cfg.state_transition_from_attr = state.get("from_attr", cfg.state_transition_from_attr)
     cfg.state_transition_to_attr = state.get("to_attr", cfg.state_transition_to_attr)
 
+    if "expected_services_per_trace" in data:
+        cfg.expected_services_per_trace = list(data["expected_services_per_trace"])
+    if "expected_log_sources" in data:
+        cfg.expected_log_sources = list(data["expected_log_sources"])
+    if "business_key_aliases" in data:
+        aliases = data["business_key_aliases"]
+        if not isinstance(aliases, dict):
+            raise ValueError(
+                f"business_key_aliases must be a mapping, got {type(aliases).__name__}"
+            )
+        cfg.business_key_aliases = {k: list(v) for k, v in aliases.items()}
+
     known_top_level = {
         "name",
         "business_keys",
@@ -169,6 +207,9 @@ def _config_from_dict(data: dict[str, Any], source_name: str) -> NormalizationCo
         "http_status_attrs",
         "handler_operation_patterns",
         "state_transitions",
+        "expected_services_per_trace",
+        "expected_log_sources",
+        "business_key_aliases",
     }
     unknown = set(data) - known_top_level
     if unknown:

@@ -26,6 +26,8 @@ from ..collector.failure_event import FailureEvent
 from ..correlator.models import CorrelatedTelemetry
 from ..engine.hypothesis import investigate
 from ..quality.assessment import assess as assess_quality
+from ..quality.hygiene import collect_hygiene_findings
+from ..quality.prerequisite import PrerequisiteFailure, check_prerequisites
 from .clustering import (
     evidence_kinds,
     fingerprint_for_result,
@@ -46,11 +48,19 @@ def observe(
     budget: int = 500,
     config: NormalizationConfig | None = None,
     window_label: str = "",
+    skip_prerequisite_check: bool = False,
 ) -> ObservationSummary:
     """Drain up to `budget` observations from `source`; record them.
 
     Returns a per-run summary. Side effects are confined to `store`.
     `source` is never mutated.
+
+    `skip_prerequisite_check` disables the telemetry-baseline gate
+    that aborts the run if the first trace doesn't meet OTel-shape
+    minimums. Default is strict (gate enabled). Set True for tests
+    that exercise minimal single-service fixtures or for legacy
+    single-service traces where the operator has accepted the
+    reduced-evidence trade-off.
     """
     config = config or NormalizationConfig()
     started = datetime.now(tz=UTC)
@@ -63,6 +73,9 @@ def observe(
     traces = 0
     new_events = 0
     skipped = 0
+    prerequisite_failure: PrerequisiteFailure | None = None
+    hygiene_findings: list[str] = []
+    first_trace_checked = False
 
     def _advance_cursor(obs_cursor: str) -> None:
         """Update the in-memory + persisted cursor.
@@ -86,6 +99,31 @@ def observe(
         if not obs.spans:
             _advance_cursor(obs.cursor_after)
             continue
+
+        # Telemetry prerequisite gate — only checked on the FIRST
+        # non-empty trace. If the source is fundamentally OTel-shaped
+        # this passes once and never blocks again. If it's NOT, the
+        # whole batch aborts with a specific operator-facing reason
+        # rather than crunching through traces ARIP can't reason on.
+        if not first_trace_checked:
+            first_trace_checked = True
+            ct_check = _build_correlated_telemetry(obs, config)
+            if not skip_prerequisite_check:
+                prereq = check_prerequisites(ct_check)
+                if prereq is not None:
+                    prerequisite_failure = prereq
+                    log.error(
+                        "telemetry prerequisite failed: %s — aborting source",
+                        prereq.code,
+                    )
+                    # Do NOT advance the cursor — operator should be able to
+                    # fix instrumentation and re-run against the same bundle.
+                    break
+            # First-pass hygiene findings (run only on first valid trace
+            # to keep cost bounded; same source = same shape, so the
+            # findings are representative).
+            hygiene_findings = collect_hygiene_findings(ct_check, config)
+
         try:
             ev = _observe_one(obs, store, config)
         except Exception:  # defensive — never let one bad trace stop the stream
@@ -117,6 +155,8 @@ def observe(
         quality_band_counts=band_counts,
         abstention_code_counts=abstention_counts,
         rule_match_counts=rule_counts,
+        prerequisite_failure=prerequisite_failure,
+        hygiene_findings=hygiene_findings,
     )
 
 
