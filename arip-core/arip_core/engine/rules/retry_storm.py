@@ -160,18 +160,27 @@ class RetryStormRule:
                 )
             )
 
-        # Corroborating logs (any ERROR-level log in the trace).
+        # Corroborating logs in the same trace. We include WARN as well
+        # as ERROR — for retry scenarios specifically, the per-attempt
+        # transient failures are typically logged at WARN (because they
+        # recovered), and excluding them meant the rule shipped only
+        # span-kind evidence and got blocked by MIN_EVIDENCE_KINDS=2.
+        # Field test (arip-fieldtest/01-retry-storm) was 100% blocked
+        # by this.
         for log in ct.logs:
-            if log.level == "ERROR" and log.trace_id == trace_id:
-                evidence.append(
-                    Evidence(
-                        kind="log",
-                        description=f"{log.service_name}: {log.message}",
-                        trace_id=log.trace_id,
-                        service=log.service_name,
-                        snippet=str(log.fields),
-                    )
+            if log.trace_id != trace_id:
+                continue
+            if log.level not in ("ERROR", "WARN", "WARNING"):
+                continue
+            evidence.append(
+                Evidence(
+                    kind="log",
+                    description=f"[{log.level}] {log.service_name}: {log.message}",
+                    trace_id=log.trace_id,
+                    service=log.service_name,
+                    snippet=str(log.fields),
                 )
+            )
 
         # --- description + ranking -----------------------------------
 

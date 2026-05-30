@@ -74,7 +74,15 @@ class NormalizationConfig:
     # ─── Handler-vs-DB latency identification ────────────────────────
     # An operation name is a "handler" if it contains any of these
     # substrings. Used by latency_vs_db rule.
-    handler_operation_patterns: list[str] = field(default_factory=lambda: ["handle_"])
+    # Defaults cover the most common HTTP frameworks' auto-instrumentation
+    # naming conventions (FastAPI/Express/Spring/etc. emit "POST /path",
+    # "GET /path", etc.) plus the demo's "handle_" convention. Operators
+    # can override entirely in their NormalizationConfig YAML — field test
+    # showed the engine was effectively dead on standard OTel
+    # auto-instrumented apps until these defaults were broadened.
+    handler_operation_patterns: list[str] = field(
+        default_factory=lambda: ["handle_", "GET ", "POST ", "PUT ", "DELETE ", "PATCH "]
+    )
 
     # ─── State-transition events ─────────────────────────────────────
     # Used by concurrent_modification rule.

@@ -56,11 +56,25 @@ def _ns_to_iso(ns_str: str) -> str:
     return datetime.fromtimestamp(ns / 1_000_000_000, tz=timezone.utc).isoformat()
 
 
+_TRACE_KEY_FALLBACKS = ("trace_id", "traceID", "traceid", "trace.id", "otelTraceID")
+
+
 def _resolve_trace_id(line: str, stream_labels: dict[str, Any], trace_key: str) -> str | None:
-    """Resolve a trace_id from the stream labels or from a JSON line body."""
-    tid = stream_labels.get(trace_key) or stream_labels.get("traceID") or stream_labels.get("trace_id")
-    if tid:
-        return str(tid)
+    """Resolve a trace_id from the stream labels or from a JSON line body.
+
+    Tries the operator-specified key first, then a fallback chain that
+    covers every variant we've seen in real Loki exports:
+      - `trace_id` (Loki label convention)
+      - `traceID` (Tempo / Jaeger style)
+      - `traceid` (OTel Python SDK Loki exporter — lowercase, no underscore)
+      - `trace.id` (dotted style)
+      - `otelTraceID` (OTel auto-instrumentation attribute key)
+    """
+    candidates = [trace_key, *(k for k in _TRACE_KEY_FALLBACKS if k != trace_key)]
+    for k in candidates:
+        v = stream_labels.get(k)
+        if v:
+            return str(v)
     line = (line or "").strip()
     if not line or not (line.startswith("{") and line.endswith("}")):
         return None
@@ -68,7 +82,13 @@ def _resolve_trace_id(line: str, stream_labels: dict[str, Any], trace_key: str) 
         body = json.loads(line)
     except json.JSONDecodeError:
         return None
-    return body.get(trace_key) or body.get("traceID") or body.get("trace_id")
+    # Body may also have an `attributes` sub-dict (OTel Python emits there).
+    attrs = body.get("attributes") if isinstance(body.get("attributes"), dict) else {}
+    for k in candidates:
+        v = body.get(k) or attrs.get(k)
+        if v:
+            return str(v)
+    return None
 
 
 def _logs_from_loki(payload: dict[str, Any], trace_key: str = "trace_id") -> Iterable[dict[str, Any]]:
@@ -76,7 +96,17 @@ def _logs_from_loki(payload: dict[str, Any], trace_key: str = "trace_id") -> Ite
     result = data.get("result") or []
     for stream in result:
         labels = stream.get("stream") or {}
-        svc = labels.get("service_name") or labels.get("service") or labels.get("app") or "unknown"
+        # `job` is what the OTel-Collector loki exporter sets by default
+        # (it maps to OTEL_SERVICE_NAME). `service.name` is OTel's
+        # canonical attribute. Try all common spellings.
+        svc = (
+            labels.get("service_name")
+            or labels.get("service.name")
+            or labels.get("service")
+            or labels.get("job")
+            or labels.get("app")
+            or "unknown"
+        )
         level = (labels.get("level") or "INFO").upper()
         for entry in stream.get("values") or []:
             if not isinstance(entry, list) or len(entry) < 2:

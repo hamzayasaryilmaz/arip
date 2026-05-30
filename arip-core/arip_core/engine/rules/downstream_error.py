@@ -68,19 +68,37 @@ class DownstreamErrorRule:
                 )
             )
 
+        # Corroborating ERROR logs. Match by either:
+        #   - exact service_name in the downstream set, OR
+        #   - common normalisation (strip `-service` suffix), OR
+        #   - same trace_id (most reliable — logs joined by trace already
+        #     belong to the failing request).
+        # The previous code only did the suffix-stripped match, which
+        # silently dropped logs from services whose names don't follow
+        # the demo's "foo-service" convention. Field test
+        # (arip-fieldtest/03-downstream-error) was blocked by this.
+        trace_ids_in_chain = {up.trace_id for up, _ in chains}
+        norm_downstream = downstream_services | {
+            s.removesuffix("-service") for s in downstream_services
+        }
         for log in ct.logs:
-            if log.level == "ERROR" and log.service_name in {
-                s.removesuffix("-service") for s in downstream_services
-            }:
-                evidence.append(
-                    Evidence(
-                        kind="log",
-                        description=f"{log.service_name}: {log.message}",
-                        trace_id=log.trace_id,
-                        service=log.service_name,
-                        snippet=str(log.fields),
-                    )
+            if log.level != "ERROR":
+                continue
+            log_relevant = (
+                log.service_name in norm_downstream
+                or (log.trace_id and log.trace_id in trace_ids_in_chain)
+            )
+            if not log_relevant:
+                continue
+            evidence.append(
+                Evidence(
+                    kind="log",
+                    description=f"{log.service_name}: {log.message}",
+                    trace_id=log.trace_id,
+                    service=log.service_name,
+                    snippet=str(log.fields),
                 )
+            )
 
         downstream = next(iter(downstream_services))
         downstream_msg = _describe_downstream_status(chains[0][1], signals)
