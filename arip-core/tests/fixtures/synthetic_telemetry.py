@@ -15,12 +15,11 @@ from __future__ import annotations
 
 import json
 import random
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-
-BASE = datetime(2026, 5, 20, 9, 0, 0, tzinfo=timezone.utc)
+BASE = datetime(2026, 5, 20, 9, 0, 0, tzinfo=UTC)
 
 
 # ---------- low-level builders --------------------------------------

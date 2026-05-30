@@ -1,0 +1,84 @@
+# Lightweight CI for ARIP core: lint + type-adjacent (ruff) + tests
+# + coverage. Does NOT bring up the demo stack — that's the
+# `arip-investigate.yml` workflow's job.
+#
+# Runs on every push and PR. Fast enough (~30s) to be useful as
+# a feedback loop without burning CI budget.
+
+name: arip-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: lint + tests (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.12", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "0.5.x"
+
+      - name: Sync arip-core deps
+        working-directory: arip-core
+        run: uv sync --extra dev
+
+      - name: Ruff lint
+        working-directory: arip-core
+        run: uv run ruff check arip_core tests
+
+      - name: Ruff format check
+        working-directory: arip-core
+        run: uv run ruff format --check arip_core tests
+
+      - name: Pytest
+        working-directory: arip-core
+        run: uv run pytest -q --cov=arip_core --cov-report=term
+
+      - name: Coverage floor
+        # Fail if coverage drops below 65%. Current is 71%; floor
+        # gives room for additions while preventing regressions.
+        working-directory: arip-core
+        run: uv run coverage report --fail-under=65
+
+  security:
+    name: bandit security scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install bandit
+        run: pip install bandit==1.9.4
+
+      - name: Run bandit (fail on high+medium severity)
+        working-directory: arip-core
+        run: bandit -r arip_core -ll

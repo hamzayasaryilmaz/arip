@@ -29,9 +29,10 @@ import gzip
 import hashlib
 import io
 import json
-from datetime import datetime, timezone
+from collections.abc import Iterator
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, BinaryIO, Iterator
+from typing import Any, BinaryIO
 
 from ...correlator.models import LogEntry, Span
 from .base import TraceObservation
@@ -60,9 +61,7 @@ class JsonlTraceSource:
             return gzip.open(self.path, "rb")
         return self.path.open("rb")
 
-    def stream(
-        self, *, cursor: str | None, budget: int
-    ) -> Iterator[TraceObservation]:
+    def stream(self, *, cursor: str | None, budget: int) -> Iterator[TraceObservation]:
         start = int(cursor) if cursor is not None else 0
         with self._open() as fh:
             # Both gzip.open and standard binary streams support .read(n).
@@ -184,12 +183,18 @@ def _stable_observation_id(
 
 
 def _span_signature(spans: list[Span]) -> str:
-    """Stable content fingerprint over a trace's spans (order-insensitive)."""
-    parts = sorted(
-        f"{s.span_id}:{s.operation_name}:{s.status}:{s.duration_us}"
-        for s in spans
-    )
-    return hashlib.sha1(":".join(parts).encode("utf-8")).hexdigest()
+    """Stable content fingerprint over a trace's spans (order-insensitive).
+
+    Used purely as an idempotency key for the observation store
+    (collapse identical-content bundles into the same observation_id).
+    Not a security operation; SHA-1 is fine and faster than SHA-256
+    for this volume of short strings.
+    """
+    parts = sorted(f"{s.span_id}:{s.operation_name}:{s.status}:{s.duration_us}" for s in spans)
+    return hashlib.sha1(
+        ":".join(parts).encode("utf-8"),
+        usedforsecurity=False,
+    ).hexdigest()
 
 
 def _span_from_dict(d: dict[str, Any]) -> Span | None:
@@ -234,13 +239,13 @@ def _parse_dt(v: Any) -> datetime | None:
         return None
     if isinstance(v, datetime):
         if v.tzinfo is None:
-            return v.replace(tzinfo=timezone.utc)
+            return v.replace(tzinfo=UTC)
         return v
     if isinstance(v, str):
         try:
             dt = datetime.fromisoformat(v.replace("Z", "+00:00"))
             if dt.tzinfo is None:
-                dt = dt.replace(tzinfo=timezone.utc)
+                dt = dt.replace(tzinfo=UTC)
             return dt
         except ValueError:
             return None

@@ -34,22 +34,26 @@ def _make_cypress_report(tests: list[dict]) -> dict:
             "end": "2026-05-30T10:00:42.123Z",
             "duration": 42123,
         },
-        "results": [{
-            "uuid": "abc",
-            "file": "cypress/e2e/checkout.cy.ts",
-            "fullFile": "/abs/path/cypress/e2e/checkout.cy.ts",
-            "suites": [{
-                "title": "checkout flow",
-                "tests": tests,
-            }],
-            "tests": [],
-        }],
+        "results": [
+            {
+                "uuid": "abc",
+                "file": "cypress/e2e/checkout.cy.ts",
+                "fullFile": "/abs/path/cypress/e2e/checkout.cy.ts",
+                "suites": [
+                    {
+                        "title": "checkout flow",
+                        "tests": tests,
+                    }
+                ],
+                "tests": [],
+            }
+        ],
     }
 
 
 def _passing_test(title: str = "checkout succeeds", trace_id_in_title: bool = False) -> dict:
     t = {
-        "title": f"{title} [trace_id={'a'*32}]" if trace_id_in_title else title,
+        "title": f"{title} [trace_id={'a' * 32}]" if trace_id_in_title else title,
         "fullTitle": f"checkout flow > {title}",
         "duration": 1234,
         "state": "passed",
@@ -102,9 +106,15 @@ def _failing_test(
 
 def test_parse_report_extracts_failure_with_trace_id_in_title(tmp_path: Path) -> None:
     report_path = tmp_path / "cypress.json"
-    report_path.write_text(json.dumps(_make_cypress_report([
-        _failing_test(trace_id_location="title"),
-    ])))
+    report_path.write_text(
+        json.dumps(
+            _make_cypress_report(
+                [
+                    _failing_test(trace_id_location="title"),
+                ]
+            )
+        )
+    )
 
     events = parse_report(report_path)
     assert len(events) == 1
@@ -117,9 +127,15 @@ def test_parse_report_extracts_failure_with_trace_id_in_title(tmp_path: Path) ->
 
 def test_parse_report_extracts_trace_id_from_err_message(tmp_path: Path) -> None:
     report_path = tmp_path / "cypress.json"
-    report_path.write_text(json.dumps(_make_cypress_report([
-        _failing_test(trace_id_location="err_message"),
-    ])))
+    report_path.write_text(
+        json.dumps(
+            _make_cypress_report(
+                [
+                    _failing_test(trace_id_location="err_message"),
+                ]
+            )
+        )
+    )
     events = parse_report(report_path)
     assert len(events) == 1
     assert events[0].trace_id == "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
@@ -127,9 +143,15 @@ def test_parse_report_extracts_trace_id_from_err_message(tmp_path: Path) -> None
 
 def test_parse_report_extracts_trace_id_from_extras(tmp_path: Path) -> None:
     report_path = tmp_path / "cypress.json"
-    report_path.write_text(json.dumps(_make_cypress_report([
-        _failing_test(trace_id_location="extras"),
-    ])))
+    report_path.write_text(
+        json.dumps(
+            _make_cypress_report(
+                [
+                    _failing_test(trace_id_location="extras"),
+                ]
+            )
+        )
+    )
     events = parse_report(report_path)
     assert len(events) == 1
     assert events[0].trace_id == "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4"
@@ -161,10 +183,16 @@ def test_parse_report_silently_skips_failures_without_trace_id(tmp_path: Path) -
 
 def test_parse_report_ignores_passing_tests(tmp_path: Path) -> None:
     report_path = tmp_path / "cypress.json"
-    report_path.write_text(json.dumps(_make_cypress_report([
-        _passing_test(),
-        _passing_test(title="another passes"),
-    ])))
+    report_path.write_text(
+        json.dumps(
+            _make_cypress_report(
+                [
+                    _passing_test(),
+                    _passing_test(title="another passes"),
+                ]
+            )
+        )
+    )
     assert parse_report(report_path) == []
 
 
@@ -172,21 +200,34 @@ def test_parse_report_handles_nested_suites(tmp_path: Path) -> None:
     """Cypress allows nested suite trees; parser must walk them."""
     failing = _failing_test()
     nested = {
-        "stats": {"suites": 2, "tests": 1, "passes": 0, "pending": 0, "failures": 1,
-                  "start": "2026-05-30T10:00:00.000Z", "end": "2026-05-30T10:00:01.000Z",
-                  "duration": 1000},
-        "results": [{
-            "file": "x.cy.ts",
-            "suites": [{
-                "title": "outer",
-                "suites": [{
-                    "title": "inner",
-                    "tests": [failing],
-                }],
+        "stats": {
+            "suites": 2,
+            "tests": 1,
+            "passes": 0,
+            "pending": 0,
+            "failures": 1,
+            "start": "2026-05-30T10:00:00.000Z",
+            "end": "2026-05-30T10:00:01.000Z",
+            "duration": 1000,
+        },
+        "results": [
+            {
+                "file": "x.cy.ts",
+                "suites": [
+                    {
+                        "title": "outer",
+                        "suites": [
+                            {
+                                "title": "inner",
+                                "tests": [failing],
+                            }
+                        ],
+                        "tests": [],
+                    }
+                ],
                 "tests": [],
-            }],
-            "tests": [],
-        }],
+            }
+        ],
     }
     report_path = tmp_path / "cypress.json"
     report_path.write_text(json.dumps(nested))
@@ -211,11 +252,24 @@ def test_parse_report_raises_on_invalid_json(tmp_path: Path) -> None:
 
 def test_parse_test_runs_returns_every_test_including_passes(tmp_path: Path) -> None:
     report_path = tmp_path / "cypress.json"
-    report_path.write_text(json.dumps(_make_cypress_report([
-        _passing_test(),
-        _failing_test(),
-        {"title": "skipped one", "pending": True, "state": "pending", "pass": False, "fail": False, "err": {}},
-    ])))
+    report_path.write_text(
+        json.dumps(
+            _make_cypress_report(
+                [
+                    _passing_test(),
+                    _failing_test(),
+                    {
+                        "title": "skipped one",
+                        "pending": True,
+                        "state": "pending",
+                        "pass": False,
+                        "fail": False,
+                        "err": {},
+                    },
+                ]
+            )
+        )
+    )
     runs = parse_test_runs(report_path)
     assert len(runs) == 3
     statuses = [r.status for r in runs]
@@ -226,10 +280,16 @@ def test_parse_test_runs_returns_every_test_including_passes(tmp_path: Path) -> 
 
 def test_parse_test_runs_preserves_trace_id_when_available(tmp_path: Path) -> None:
     report_path = tmp_path / "cypress.json"
-    report_path.write_text(json.dumps(_make_cypress_report([
-        _failing_test(),
-        _passing_test(),
-    ])))
+    report_path.write_text(
+        json.dumps(
+            _make_cypress_report(
+                [
+                    _failing_test(),
+                    _passing_test(),
+                ]
+            )
+        )
+    )
     runs = parse_test_runs(report_path)
     failed = [r for r in runs if r.status == "failed"]
     assert len(failed) == 1
@@ -248,10 +308,14 @@ def test_detect_report_kind_cypress(tmp_path: Path) -> None:
 def test_detect_report_kind_playwright(tmp_path: Path) -> None:
     """Playwright reports have `suites` at the top level, no `stats`."""
     report_path = tmp_path / "pw.json"
-    report_path.write_text(json.dumps({
-        "config": {},
-        "suites": [{"title": "x", "specs": []}],
-    }))
+    report_path.write_text(
+        json.dumps(
+            {
+                "config": {},
+                "suites": [{"title": "x", "specs": []}],
+            }
+        )
+    )
     assert detect_report_kind(report_path) == "playwright"
 
 

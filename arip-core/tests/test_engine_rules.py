@@ -12,7 +12,7 @@ markers, because the rules under test must not depend on those.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -22,7 +22,7 @@ from arip_core.engine.rules.downstream_error import DownstreamErrorRule
 from arip_core.engine.rules.latency_vs_db import LatencyVsDBRule
 from arip_core.engine.rules.webhook_race import WebhookRaceRule
 
-NOW = datetime(2026, 5, 18, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 5, 18, 12, 0, 0, tzinfo=UTC)
 
 
 def _failure(trace_id: str = "t-primary", order_id: str = "ORD-1") -> FailureEvent:
@@ -168,7 +168,10 @@ def test_concurrent_modification_silent_when_only_one_trace_transitions():
         start_ms=0,
         duration_us=300_000,
         attributes={"order.id": "ORD-1"},
-        events=[_transition_event(0, "", "pending"), _transition_event(300, "pending", "confirmed")],
+        events=[
+            _transition_event(0, "", "pending"),
+            _transition_event(300, "pending", "confirmed"),
+        ],
     )
     reader = _span(
         op="order.lookup",
@@ -225,7 +228,10 @@ def test_concurrent_modification_silent_for_single_trace():
         start_ms=0,
         duration_us=300_000,
         attributes={"order.id": "ORD-1"},
-        events=[_transition_event(0, "", "pending"), _transition_event(300, "pending", "confirmed")],
+        events=[
+            _transition_event(0, "", "pending"),
+            _transition_event(300, "pending", "confirmed"),
+        ],
     )
     assert WebhookRaceRule().evaluate(_ct([only_one])) == []
 
@@ -275,12 +281,19 @@ def test_downstream_error_softens_claim_when_chain_not_fully_propagated():
     # (e.g. retry recovered the request).
     root = _span(op="checkout.process", span_id="root", status="OK")
     http_post = _span(
-        op="HTTP POST", svc="payment-service", span_id="hp",
-        parent="root", status="ERROR",
+        op="HTTP POST",
+        svc="payment-service",
+        span_id="hp",
+        parent="root",
+        status="ERROR",
     )
     inv = _span(
-        op="inventory.handle_reserve", svc="inventory-service", span_id="inv",
-        parent="hp", status="ERROR", status_message="HTTP 503",
+        op="inventory.handle_reserve",
+        svc="inventory-service",
+        span_id="inv",
+        parent="hp",
+        status="ERROR",
+        status_message="HTTP 503",
     )
     out = DownstreamErrorRule().evaluate(_ct([root, http_post, inv]))
     assert len(out) == 1
@@ -320,7 +333,13 @@ def test_latency_vs_db_fires_when_handler_dwarfs_db():
 
 def test_latency_vs_db_silent_when_handler_fast():
     handler = _span(op="inventory.handle_reserve", span_id="h1", duration_us=10_000)
-    db = _span(op="db.x", span_id="d1", parent="h1", duration_us=8_000, attributes={"db.system": "postgresql"})
+    db = _span(
+        op="db.x",
+        span_id="d1",
+        parent="h1",
+        duration_us=8_000,
+        attributes={"db.system": "postgresql"},
+    )
     assert LatencyVsDBRule().evaluate(_ct([handler, db])) == []
 
 

@@ -28,8 +28,8 @@ from .models import (
 )
 
 __all__ = [
-    "CanonicalAnomalyEvent",
     "AnomalyCluster",
+    "CanonicalAnomalyEvent",
     "ObservationDigest",
     "ObservationSummary",
 ]

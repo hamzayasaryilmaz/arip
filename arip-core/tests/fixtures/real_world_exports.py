@@ -21,12 +21,11 @@ import gzip
 import io
 import json
 import zipfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-
-T0_US = int(datetime(2026, 5, 20, 9, 0, 0, tzinfo=timezone.utc).timestamp() * 1_000_000)
+T0_US = int(datetime(2026, 5, 20, 9, 0, 0, tzinfo=UTC).timestamp() * 1_000_000)
 T0_NS = T0_US * 1_000
 
 
@@ -79,45 +78,47 @@ def _jaeger_span(
 
 def jaeger_search_response_realistic() -> dict[str, Any]:
     """Multi-trace Jaeger search response with realistic noise:
-      - typed tags (int64, bool)
-      - operationName with embedded order_id (path parameter pathology)
-      - one trace with a downstream_error shape
-      - one trace with a retry_storm shape (3 attempts)
-      - one trace with an orphan span (parent not in this batch — sampled out)
+    - typed tags (int64, bool)
+    - operationName with embedded order_id (path parameter pathology)
+    - one trace with a downstream_error shape
+    - one trace with a retry_storm shape (3 attempts)
+    - one trace with an orphan span (parent not in this batch — sampled out)
     """
     traces: list[dict[str, Any]] = []
 
     # Trace 1: downstream_error, path-parameter operation name
-    traces.append({
-        "traceID": "abcdef0000000001",
-        "processes": {
-            "p1": {"serviceName": "payment-service", "tags": []},
-            "p2": {"serviceName": "inventory-service", "tags": []},
-        },
-        "spans": [
-            _jaeger_span(
-                trace_id="abcdef0000000001",
-                span_id="s1",
-                operation_name="POST /checkout/order-12345",
-                process_id="p1",
-                status_error=True,
-                status_message="downstream failure",
-                tags={"http.status_code": 503, "http.method": "POST"},
-            ),
-            _jaeger_span(
-                trace_id="abcdef0000000001",
-                span_id="s2",
-                operation_name="inventory.reserve",
-                process_id="p2",
-                parent_span_id="s1",
-                start_us_offset=10_000,
-                duration_us=8_000,
-                status_error=True,
-                status_message="reserve failed",
-                tags={"http.status_code": 503},
-            ),
-        ],
-    })
+    traces.append(
+        {
+            "traceID": "abcdef0000000001",
+            "processes": {
+                "p1": {"serviceName": "payment-service", "tags": []},
+                "p2": {"serviceName": "inventory-service", "tags": []},
+            },
+            "spans": [
+                _jaeger_span(
+                    trace_id="abcdef0000000001",
+                    span_id="s1",
+                    operation_name="POST /checkout/order-12345",
+                    process_id="p1",
+                    status_error=True,
+                    status_message="downstream failure",
+                    tags={"http.status_code": 503, "http.method": "POST"},
+                ),
+                _jaeger_span(
+                    trace_id="abcdef0000000001",
+                    span_id="s2",
+                    operation_name="inventory.reserve",
+                    process_id="p2",
+                    parent_span_id="s1",
+                    start_us_offset=10_000,
+                    duration_us=8_000,
+                    status_error=True,
+                    status_message="reserve failed",
+                    tags={"http.status_code": 503},
+                ),
+            ],
+        }
+    )
 
     # Trace 2: retry_storm, 3 attempts (intentionally low to exercise
     # the post-fix fingerprint stability)
@@ -143,30 +144,34 @@ def jaeger_search_response_realistic() -> dict[str, Any]:
                 },
             )
         )
-    traces.append({
-        "traceID": "abcdef0000000002",
-        "processes": {"p2": {"serviceName": "inventory-service", "tags": []}},
-        "spans": retry_spans,
-    })
+    traces.append(
+        {
+            "traceID": "abcdef0000000002",
+            "processes": {"p2": {"serviceName": "inventory-service", "tags": []}},
+            "spans": retry_spans,
+        }
+    )
 
     # Trace 3: orphan span (parent_span_id references a span not in
     # this batch — common with tail sampling).
-    traces.append({
-        "traceID": "abcdef0000000003",
-        "processes": {"p2": {"serviceName": "inventory-service", "tags": []}},
-        "spans": [
-            _jaeger_span(
-                trace_id="abcdef0000000003",
-                span_id="orphan",
-                operation_name="inventory.reserve",
-                process_id="p2",
-                parent_span_id="missing-parent",
-                status_error=True,
-                status_message="reserve failed",
-                tags={"http.status_code": 500},
-            ),
-        ],
-    })
+    traces.append(
+        {
+            "traceID": "abcdef0000000003",
+            "processes": {"p2": {"serviceName": "inventory-service", "tags": []}},
+            "spans": [
+                _jaeger_span(
+                    trace_id="abcdef0000000003",
+                    span_id="orphan",
+                    operation_name="inventory.reserve",
+                    process_id="p2",
+                    parent_span_id="missing-parent",
+                    status_error=True,
+                    status_message="reserve failed",
+                    tags={"http.status_code": 500},
+                ),
+            ],
+        }
+    )
 
     return {"data": traces, "total": len(traces), "limit": 20, "offset": 0}
 
@@ -214,11 +219,15 @@ def loki_streams_response_realistic() -> dict[str, Any]:
                     "values": [
                         [
                             str(T0_NS + 60_000_000),
-                            _loki_line("abcdef0000000002", "reserve_attempt: upstream 503", json_body=True),
+                            _loki_line(
+                                "abcdef0000000002", "reserve_attempt: upstream 503", json_body=True
+                            ),
                         ],
                         [
                             str(T0_NS + 120_000_000),
-                            _loki_line("abcdef0000000002", "reserve_attempt: upstream 503", json_body=True),
+                            _loki_line(
+                                "abcdef0000000002", "reserve_attempt: upstream 503", json_body=True
+                            ),
                         ],
                     ],
                 },
@@ -269,7 +278,9 @@ def build_gha_artifact_zip(
     return buf.getvalue()
 
 
-def write_gha_artifact(path: Path, bundles: list[dict[str, Any]], *, layout: str = "directory") -> None:
+def write_gha_artifact(
+    path: Path, bundles: list[dict[str, Any]], *, layout: str = "directory"
+) -> None:
     path.write_bytes(build_gha_artifact_zip(bundles, layout=layout))
 
 

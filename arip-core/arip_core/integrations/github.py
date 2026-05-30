@@ -15,7 +15,6 @@ from __future__ import annotations
 from io import StringIO
 from typing import Any
 
-
 HEADER = "## 🔬 ARIP investigation\n\n"
 MAX_TABLE_ROWS = 25
 
@@ -35,10 +34,7 @@ def render_pr_comment(reports: list[dict[str, Any]], max_bytes: int = 60_000) ->
     flagged_flaky = sum(
         1 for r in reports if (r.get("flaky") or {}).get("classification") == "flaky"
     )
-    low_q = sum(
-        1 for r in reports
-        if (r.get("quality") or {}).get("confidence_band") == "low"
-    )
+    low_q = sum(1 for r in reports if (r.get("quality") or {}).get("confidence_band") == "low")
 
     buf = StringIO()
     buf.write(HEADER)

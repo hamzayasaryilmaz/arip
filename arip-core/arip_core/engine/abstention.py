@@ -190,6 +190,7 @@ def _evidence_overlap(a: Hypothesis, b: Hypothesis) -> float:
     """Jaccard similarity between the (span_id ∪ log-message) sets of
     two hypotheses' cited evidence. 1.0 means identical evidence; 0.0
     means completely disjoint."""
+
     def keys(h: Hypothesis) -> set[str]:
         out: set[str] = set()
         for e in h.evidence:
@@ -200,6 +201,7 @@ def _evidence_overlap(a: Hypothesis, b: Hypothesis) -> float:
                 # state during confirmation"), so use them as identifiers.
                 out.add(f"log:{e.description}")
         return out
+
     ka, kb = keys(a), keys(b)
     if not ka or not kb:
         return 0.0

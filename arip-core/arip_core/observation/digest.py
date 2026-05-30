@@ -7,9 +7,9 @@ parsed. Keep it short, honest, and explicit about what is NOT here
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from collections.abc import Sequence
+from datetime import UTC, datetime
 from io import StringIO
-from typing import Sequence
 
 from .models import AnomalyCluster, ObservationDigest, ObservationSummary
 from .store import ObservationStore
@@ -35,7 +35,7 @@ def build_digest(
     )
     low_q = store.count_low_quality_events(window_days=window_days)
     return ObservationDigest(
-        generated_at=datetime.now(tz=timezone.utc),
+        generated_at=datetime.now(tz=UTC),
         window_label=window_label,
         summary=summary,
         rule_clusters=rule_clusters,
@@ -59,9 +59,7 @@ def render_digest(digest: ObservationDigest) -> str:
 
     out.write("## Recurring patterns (rule-grounded)\n\n")
     if not digest.rule_clusters:
-        out.write(
-            "_No rule-grounded recurring patterns in this window._\n\n"
-        )
+        out.write("_No rule-grounded recurring patterns in this window._\n\n")
     else:
         _write_rule_table(out, digest.rule_clusters)
 
@@ -108,23 +106,15 @@ def _write_summary(out: StringIO, s: ObservationSummary) -> None:
     out.write(f"- new events: {s.events_new}\n")
     out.write(f"- idempotent skips: {s.events_skipped_idempotent}\n")
     if s.cursor_before is not None or s.cursor_after is not None:
-        out.write(
-            f"- cursor: `{s.cursor_before or '∅'}` → `{s.cursor_after or '∅'}`\n"
-        )
+        out.write(f"- cursor: `{s.cursor_before or '∅'}` → `{s.cursor_after or '∅'}`\n")
     if s.quality_band_counts:
-        bands = ", ".join(
-            f"{b}={n}" for b, n in sorted(s.quality_band_counts.items())
-        )
+        bands = ", ".join(f"{b}={n}" for b, n in sorted(s.quality_band_counts.items()))
         out.write(f"- quality band distribution: {bands}\n")
     if s.rule_match_counts:
-        rules = ", ".join(
-            f"{r}={n}" for r, n in sorted(s.rule_match_counts.items())
-        )
+        rules = ", ".join(f"{r}={n}" for r, n in sorted(s.rule_match_counts.items()))
         out.write(f"- rule matches: {rules}\n")
     if s.abstention_code_counts:
-        ab = ", ".join(
-            f"{c}={n}" for c, n in sorted(s.abstention_code_counts.items())
-        )
+        ab = ", ".join(f"{c}={n}" for c, n in sorted(s.abstention_code_counts.items()))
         out.write(f"- abstentions: {ab}\n")
     out.write("\n")
 
@@ -145,9 +135,7 @@ def _write_rule_table(out: StringIO, clusters: Sequence[AnomalyCluster]) -> None
     out.write("\n")
 
 
-def _write_abstention_table(
-    out: StringIO, clusters: Sequence[AnomalyCluster]
-) -> None:
+def _write_abstention_table(out: StringIO, clusters: Sequence[AnomalyCluster]) -> None:
     out.write(
         "| abstention | recurrence | first seen | last seen | services | operations |\n"
         "|---|---:|---|---|---|---|\n"
@@ -174,4 +162,4 @@ def _join(items: Sequence[str], limit: int = 6) -> str:
 
 
 def _short_dt(dt: datetime) -> str:
-    return dt.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M")
+    return dt.astimezone(UTC).strftime("%Y-%m-%d %H:%M")

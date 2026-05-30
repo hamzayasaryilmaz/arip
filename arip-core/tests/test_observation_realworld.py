@@ -26,21 +26,17 @@ import sys
 import zipfile
 from pathlib import Path
 
-import pytest
-
 from arip_core.observation.digest import build_digest, render_digest
 from arip_core.observation.pipeline import observe
 from arip_core.observation.sources import DirectoryTraceSource, JsonlTraceSource
 from arip_core.observation.store import ObservationStore
 
 from .fixtures.real_world_exports import (
-    build_gha_artifact_zip,
     jaeger_search_response_realistic,
     loki_streams_response_realistic,
     write_gha_artifact,
     write_partial_gzip,
 )
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 JAEGER_TOOL = REPO_ROOT / "bin" / "jaeger-export-to-bundles.py"
@@ -119,7 +115,7 @@ def test_jaeger_path_parameter_operation_name_clusters_safely(tmp_path: Path) ->
             for ref in s.get("references") or []:
                 ref["traceID"] = clone["traceID"]
         extra.append(clone)
-    payload["data"] = [base_trace] + extra + payload["data"][1:]
+    payload["data"] = [base_trace, *extra, *payload["data"][1:]]
     export.write_text(json.dumps(payload))
 
     bundles = tmp_path / "bundles.jsonl"
@@ -164,10 +160,14 @@ def test_loki_join_adds_logs_to_existing_bundles(tmp_path: Path) -> None:
     unmatched = tmp_path / "unmatched.jsonl"
     _run_tool(
         LOKI_TOOL,
-        "--in", str(l_export),
-        "--bundles", str(bundles_a),
-        "--out", str(bundles_b),
-        "--unmatched-out", str(unmatched),
+        "--in",
+        str(l_export),
+        "--bundles",
+        str(bundles_a),
+        "--out",
+        str(bundles_b),
+        "--unmatched-out",
+        str(unmatched),
     )
 
     # The free-text "rate limiter near threshold" log line has no
@@ -204,10 +204,7 @@ def test_gha_artifact_directory_layout_observes_correctly(tmp_path: Path) -> Non
     After unzip, DirectoryTraceSource handles the resulting folder.
     This test exercises that operator pattern end-to-end."""
     bundles = [
-        json.loads(line)
-        for line in (
-            _bundles_from_jaeger(tmp_path)
-        ).read_text().splitlines()
+        json.loads(line) for line in (_bundles_from_jaeger(tmp_path)).read_text().splitlines()
     ]
 
     artifact = tmp_path / "ci-traces.zip"
@@ -309,7 +306,9 @@ def test_file_rotation_does_not_silently_drop_new_writes(tmp_path: Path) -> None
 
     # Step 2: simulate rotation — replace the file with a NEW file
     # that has fresh content shorter than the saved cursor.
-    bundles_path.write_text('{"trace_id":"rot-1","captured_at":"2026-05-22T10:00:00Z","spans":[{"trace_id":"rot-1","span_id":"x","service_name":"s","operation_name":"op","start_time":"2026-05-22T10:00:00Z","duration_us":1000,"status":"OK","status_message":"","attributes":{},"events":[]}],"logs":[]}\n')
+    bundles_path.write_text(
+        '{"trace_id":"rot-1","captured_at":"2026-05-22T10:00:00Z","spans":[{"trace_id":"rot-1","span_id":"x","service_name":"s","operation_name":"op","start_time":"2026-05-22T10:00:00Z","duration_us":1000,"status":"OK","status_message":"","attributes":{},"events":[]}],"logs":[]}\n'
+    )
 
     # Step 3: observe again. Cursor is past new EOF; current behaviour
     # is silent skip. This test PINS that behaviour so it changes
@@ -364,9 +363,12 @@ def test_realistic_export_digest_is_actionable(tmp_path: Path) -> None:
     bundles_b = tmp_path / "bundles-b.jsonl"
     _run_tool(
         LOKI_TOOL,
-        "--in", str(l_export),
-        "--bundles", str(bundles_a),
-        "--out", str(bundles_b),
+        "--in",
+        str(l_export),
+        "--bundles",
+        str(bundles_a),
+        "--out",
+        str(bundles_b),
     )
 
     store = ObservationStore(tmp_path / "obs.db")

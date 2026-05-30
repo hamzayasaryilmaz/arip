@@ -18,19 +18,23 @@ What this rule must guarantee:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from arip_core.collector.failure_event import FailureEvent
 from arip_core.correlator.models import CorrelatedTelemetry, LogEntry, Span
 from arip_core.engine.rules.pool_exhaustion import PoolExhaustionRule
 
-NOW = datetime(2026, 5, 19, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 5, 19, 12, 0, 0, tzinfo=UTC)
 
 
 def _failure() -> FailureEvent:
     return FailureEvent(
-        test_name="t", timestamp=NOW, environment="test",
-        trace_id="tp", assertion="x", error_message="boom",
+        test_name="t",
+        timestamp=NOW,
+        environment="test",
+        trace_id="tp",
+        assertion="x",
+        error_message="boom",
     )
 
 
@@ -74,8 +78,9 @@ def _span(
     )
 
 
-def _acquire_span(*, wait_ms: int, acquired: int, max_conns: int,
-                  empties: int = 0, span_id: str = "acq") -> Span:
+def _acquire_span(
+    *, wait_ms: int, acquired: int, max_conns: int, empties: int = 0, span_id: str = "acq"
+) -> Span:
     return _span(
         op="db.acquire_connection",
         span_id=span_id,
@@ -213,7 +218,9 @@ def test_confidence_increases_with_warn_log():
     no_log = PoolExhaustionRule().evaluate(_ct(spans))[0]
 
     log = LogEntry(
-        timestamp=NOW, service_name="inventory", level="WARN",
+        timestamp=NOW,
+        service_name="inventory",
+        level="WARN",
         message="slow db connection acquire",
         trace_id="tp",
         fields={"wait_ms": 1502, "pool_acquired": 3, "pool_max": 3},

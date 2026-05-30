@@ -19,7 +19,7 @@ import logging
 import sys
 import time
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -27,8 +27,7 @@ from rich.console import Console
 from rich.table import Table
 
 from .canonical.config import NormalizationConfig, load_config_yaml
-from .collector import cypress_listener
-from .collector import playwright_listener
+from .collector import cypress_listener, playwright_listener
 from .collector.failure_event import FailureEvent
 from .correlator.docker_logs_client import DockerLogsClient
 from .correlator.jaeger_client import JaegerClient
@@ -48,7 +47,9 @@ console = Console()
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(prog="arip", description="Autonomous Reliability Investigation Platform")
+    parser = argparse.ArgumentParser(
+        prog="arip", description="Autonomous Reliability Investigation Platform"
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     inv = sub.add_parser(
@@ -59,7 +60,7 @@ def main(argv: list[str] | None = None) -> int:
         "report",
         type=Path,
         help="Path to playwright-report.json or cypress-report.json "
-             "(framework auto-detected; override with --framework)",
+        "(framework auto-detected; override with --framework)",
     )
     inv.add_argument(
         "--framework",
@@ -67,8 +68,12 @@ def main(argv: list[str] | None = None) -> int:
         default="auto",
         help="Force a specific test framework parser. Default: auto-detect.",
     )
-    inv.add_argument("--out", type=Path, default=Path("reports"), help="Output directory (default: reports/)")
-    inv.add_argument("--memory", type=Path, default=Path(".arip/memory.db"), help="SQLite memory store path")
+    inv.add_argument(
+        "--out", type=Path, default=Path("reports"), help="Output directory (default: reports/)"
+    )
+    inv.add_argument(
+        "--memory", type=Path, default=Path(".arip/memory.db"), help="SQLite memory store path"
+    )
     inv.add_argument("--environment", default="demo", help="Environment label")
     inv.add_argument("--jaeger", default="http://localhost:16686", help="Jaeger base URL")
     inv.add_argument(
@@ -76,16 +81,22 @@ def main(argv: list[str] | None = None) -> int:
         type=Path,
         default=None,
         help="Path to a normalization config YAML. If omitted, the built-in "
-             "demo conventions are used.",
+        "demo conventions are used.",
     )
-    inv.add_argument("--no-llm", action="store_true", help="Skip LLM summarisation even if API key is set")
-    inv.add_argument("--no-memory", action="store_true", help="Do not read or write the memory store")
+    inv.add_argument(
+        "--no-llm", action="store_true", help="Skip LLM summarisation even if API key is set"
+    )
+    inv.add_argument(
+        "--no-memory", action="store_true", help="Do not read or write the memory store"
+    )
     inv.add_argument("-v", "--verbose", action="store_true")
 
     pr = sub.add_parser("pr-comment", help="Render a concise PR comment from reports/")
     pr.add_argument("reports_dir", type=Path)
     pr.add_argument("-o", "--out", type=Path, default=None, help="Write to file (default: stdout)")
-    pr.add_argument("--max-bytes", type=int, default=60_000, help="GitHub comment soft limit (default: 60000)")
+    pr.add_argument(
+        "--max-bytes", type=int, default=60_000, help="GitHub comment soft limit (default: 60000)"
+    )
 
     obs = sub.add_parser(
         "observe",
@@ -207,10 +218,7 @@ def _cmd_investigate(args) -> int:
     if not args.no_memory:
         memory = MemoryStore(args.memory)
         memory.record_test_runs_bulk(
-            [
-                (r.test_name, r.status, r.timestamp, r.environment, r.trace_id)
-                for r in runs
-            ]
+            [(r.test_name, r.status, r.timestamp, r.environment, r.trace_id) for r in runs]
         )
 
     if not events:
@@ -261,12 +269,8 @@ def _cmd_investigate(args) -> int:
                 outcome = "—"
                 sev = "—"
                 conf = "—"
-            flaky_cell = (
-                report.flaky.classification if report.flaky else "—"
-            )
-            repeats_cell = (
-                str(report.history.occurrences_total) if report.history else "—"
-            )
+            flaky_cell = report.flaky.classification if report.flaky else "—"
+            repeats_cell = str(report.history.occurrences_total) if report.history else "—"
             md_path = paths["markdown"]
             table.add_row(
                 ev.test_name,
@@ -275,7 +279,9 @@ def _cmd_investigate(args) -> int:
                 conf,
                 flaky_cell,
                 repeats_cell,
-                str(md_path.relative_to(Path.cwd())) if md_path.is_relative_to(Path.cwd()) else str(md_path),
+                str(md_path.relative_to(Path.cwd()))
+                if md_path.is_relative_to(Path.cwd())
+                else str(md_path),
             )
 
     console.print()
@@ -307,7 +313,7 @@ def _investigate_one(
         alternative_hypotheses=result.alternatives,
         timeline_summary=timeline_text,
         evidence_links=evidence_links,
-        generated_at=datetime.now(tz=timezone.utc),
+        generated_at=datetime.now(tz=UTC),
         investigation_duration_seconds=duration,
         primary_trace_id=ct.primary_trace_id,
         related_trace_ids=ct.related_trace_ids,
@@ -349,7 +355,9 @@ def _investigate_one(
     md_path = out_dir / f"{slug}.md"
     json_path = out_dir / f"{slug}.json"
     md_path.write_text(render(report))
-    json_path.write_text(json.dumps(_report_to_dict(report, ct), indent=2, sort_keys=True, default=str))
+    json_path.write_text(
+        json.dumps(_report_to_dict(report, ct), indent=2, sort_keys=True, default=str)
+    )
 
     if memory is not None:
         memory.record_investigation(report, fingerprint=fingerprint, report_path=str(md_path))
@@ -427,11 +435,15 @@ def _emit_pr_comment(body: str, args) -> None:
 
 def _cmd_preflight(args) -> int:
     """Onboarding diagnostic: pick the first failure from a Playwright
-    report, fetch its telemetry, and report quality + rule readiness.
-    Does not run rules, does not write reports."""
-    from .quality.contracts import RULE_CONTRACTS, contracts_for_rule
+    or Cypress report, fetch its telemetry, and report quality + rule
+    readiness. Does not run rules, does not write reports."""
+    from .quality.contracts import RULE_CONTRACTS
 
-    events = parse_report(args.report, environment=args.environment)
+    framework = cypress_listener.detect_report_kind(args.report)
+    if framework == "cypress":
+        events = cypress_listener.parse_report(args.report, environment=args.environment)
+    else:
+        events = playwright_listener.parse_report(args.report, environment=args.environment)
     if not events:
         console.print("[yellow]no failures in report — nothing to preflight against[/yellow]")
         return 0
@@ -484,12 +496,14 @@ def _cmd_preflight(args) -> int:
 
     console.print()
     console.print("[bold]Rule readiness[/bold] — would this telemetry let each rule fire?")
-    for c in RULE_CONTRACTS:
-        ready = c.rule_id in q.rules_likely_to_fire
+    # Note: distinct loop variable name to avoid shadowing the
+    # SignalCoverage `c` used earlier in this function.
+    for contract in RULE_CONTRACTS:
+        ready = contract.rule_id in q.rules_likely_to_fire
         mark = "[green]✓[/]" if ready else "[red]✗[/]"
-        console.print(f"  {mark} {c.rule_id:<26s}  {c.description}")
+        console.print(f"  {mark} {contract.rule_id:<26s}  {contract.description}")
         if not ready:
-            missing = ", ".join(c.required_signals)
+            missing = ", ".join(contract.required_signals)
             console.print(f"      [dim]→ missing required signal(s): {missing}[/]")
 
     if q.is_low_confidence:
@@ -511,10 +525,6 @@ def _cmd_observe(args) -> int:
     No candidate tests. No PRs. No replay. No alerting. Just clusters."""
     from .observation.digest import build_digest, render_digest
     from .observation.pipeline import observe
-    from .observation.sources import (
-        DirectoryTraceSource,
-        JsonlTraceSource,
-    )
     from .observation.store import ObservationStore
 
     if args.config is not None:
@@ -586,9 +596,9 @@ def _resolve_source(uri: str):
     from .observation.sources import DirectoryTraceSource, JsonlTraceSource
 
     if uri.startswith("jsonl://"):
-        return JsonlTraceSource(uri[len("jsonl://"):])
+        return JsonlTraceSource(uri[len("jsonl://") :])
     if uri.startswith("dir://"):
-        return DirectoryTraceSource(uri[len("dir://"):])
+        return DirectoryTraceSource(uri[len("dir://") :])
     p = Path(uri)
     if p.is_dir():
         return DirectoryTraceSource(p)

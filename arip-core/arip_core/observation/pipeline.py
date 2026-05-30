@@ -19,8 +19,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
-from datetime import datetime, timezone
-from typing import Sequence
+from datetime import UTC, datetime
 
 from ..canonical.config import NormalizationConfig
 from ..collector.failure_event import FailureEvent
@@ -54,7 +53,7 @@ def observe(
     `source` is never mutated.
     """
     config = config or NormalizationConfig()
-    started = datetime.now(tz=timezone.utc)
+    started = datetime.now(tz=UTC)
     cursor_before = store.load_cursor(source.name)
     cursor_after = cursor_before
 
@@ -65,21 +64,35 @@ def observe(
     new_events = 0
     skipped = 0
 
+    def _advance_cursor(obs_cursor: str) -> None:
+        """Update the in-memory + persisted cursor.
+
+        Falls back to the previous value when the source emits an
+        empty cursor (e.g. a malformed bundle the source still wants
+        the pipeline to skip past). Does NOT persist None — that
+        would crash the NOT NULL column. Silently skips the save
+        when we have nothing meaningful to persist (first observation
+        of a fresh source whose first bundle has no cursor).
+        """
+        nonlocal cursor_after
+        candidate = obs_cursor or cursor_after
+        if candidate is None:
+            return
+        cursor_after = candidate
+        store.save_cursor(source.name, cursor_after)
+
     for obs in source.stream(cursor=cursor_before, budget=budget):
         traces += 1
         if not obs.spans:
-            cursor_after = obs.cursor_after or cursor_after
-            store.save_cursor(source.name, cursor_after)
+            _advance_cursor(obs.cursor_after)
             continue
         try:
             ev = _observe_one(obs, store, config)
         except Exception:  # defensive — never let one bad trace stop the stream
             log.exception("observation failed for %s", obs.observation_id)
-            cursor_after = obs.cursor_after or cursor_after
-            store.save_cursor(source.name, cursor_after)
+            _advance_cursor(obs.cursor_after)
             continue
-        cursor_after = obs.cursor_after or cursor_after
-        store.save_cursor(source.name, cursor_after)
+        _advance_cursor(obs.cursor_after)
         if ev is None:
             skipped += 1
             continue
@@ -88,11 +101,9 @@ def observe(
         if ev.rule_id:
             rule_counts[ev.rule_id] = rule_counts.get(ev.rule_id, 0) + 1
         if ev.abstention_code:
-            abstention_counts[ev.abstention_code] = (
-                abstention_counts.get(ev.abstention_code, 0) + 1
-            )
+            abstention_counts[ev.abstention_code] = abstention_counts.get(ev.abstention_code, 0) + 1
 
-    finished = datetime.now(tz=timezone.utc)
+    finished = datetime.now(tz=UTC)
     return ObservationSummary(
         source_name=source.name,
         window_label=window_label,
@@ -134,7 +145,7 @@ def _observe_one(
         observation_id=obs.observation_id,
         trace_id_hash=trace_hash,
         fingerprint=fingerprint,
-        observed_at=obs.observed_at or datetime.now(tz=timezone.utc),
+        observed_at=obs.observed_at or datetime.now(tz=UTC),
         rule_id=rule_id,
         abstention_code=abstention_code,
         quality_band=quality.confidence_band,
@@ -157,7 +168,7 @@ def _build_correlated_telemetry(
 ) -> CorrelatedTelemetry:
     failure = FailureEvent(
         test_name=f"observation:{_short(obs.source_name)}:{obs.trace_id[:12]}",
-        timestamp=obs.observed_at or datetime.now(tz=timezone.utc),
+        timestamp=obs.observed_at or datetime.now(tz=UTC),
         environment="observation",
         trace_id=obs.trace_id,
         assertion="",

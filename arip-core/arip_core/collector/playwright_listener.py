@@ -18,10 +18,11 @@ This module exposes two parsers because the memory store needs both:
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from .failure_event import FailureEvent
 
@@ -42,8 +43,7 @@ class TestRun:
 def _walk_specs(suites: list[dict[str, Any]]) -> Iterator[dict[str, Any]]:
     """Yield every spec across the (recursive) suite tree."""
     for suite in suites:
-        for spec in suite.get("specs", []):
-            yield spec
+        yield from suite.get("specs", [])
         yield from _walk_specs(suite.get("suites", []))
 
 
@@ -83,9 +83,7 @@ def parse_report(report_path: str | Path, environment: str = "demo") -> list[Fai
                     continue
                 ts = result.get("startTime")
                 started = (
-                    datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                    if ts
-                    else datetime.now(timezone.utc)
+                    datetime.fromisoformat(ts.replace("Z", "+00:00")) if ts else datetime.now(UTC)
                 )
                 events.append(
                     FailureEvent(
@@ -131,7 +129,7 @@ def parse_test_runs(report_path: str | Path, environment: str = "demo") -> list[
                 ts = (
                     datetime.fromisoformat(ts_raw.replace("Z", "+00:00"))
                     if ts_raw
-                    else datetime.now(timezone.utc)
+                    else datetime.now(UTC)
                 )
                 runs.append(
                     TestRun(

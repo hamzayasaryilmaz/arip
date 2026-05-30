@@ -8,7 +8,7 @@ to swap for Tempo or OTLP/Collector later.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -26,7 +26,7 @@ class JaegerClient:
     def close(self) -> None:
         self._client.close()
 
-    def __enter__(self) -> "JaegerClient":
+    def __enter__(self) -> JaegerClient:
         return self
 
     def __exit__(self, *exc: Any) -> None:
@@ -86,7 +86,7 @@ class JaegerClient:
         """Return trace IDs where ``service`` has a span tagged
         ``tag_key=tag_value``. Used to find sibling traces (e.g. the
         webhook trace) that share the same ``order.id``."""
-        end_us = int(datetime.now(tz=timezone.utc).timestamp() * 1_000_000)
+        end_us = int(datetime.now(tz=UTC).timestamp() * 1_000_000)
         start_us = end_us - (lookback_seconds * 1_000_000)
         params = {
             "service": service,
@@ -115,7 +115,11 @@ class JaegerClient:
         for raw in trace.get("spans", []):
             svc = processes.get(raw.get("processID"), {}).get("serviceName", "?")
             tags = {tag["key"]: tag.get("value") for tag in raw.get("tags", [])}
-            status = "ERROR" if tags.get("otel.status_code") == "ERROR" or tags.get("error") is True else "OK"
+            status = (
+                "ERROR"
+                if tags.get("otel.status_code") == "ERROR" or tags.get("error") is True
+                else "OK"
+            )
             status_message = tags.get("otel.status_description") or tags.get("error.message") or ""
             parent = None
             for ref in raw.get("references", []):
@@ -149,4 +153,4 @@ class JaegerClient:
 
 
 def _us_to_datetime(us: int) -> datetime:
-    return datetime.fromtimestamp(us / 1_000_000, tz=timezone.utc)
+    return datetime.fromtimestamp(us / 1_000_000, tz=UTC)

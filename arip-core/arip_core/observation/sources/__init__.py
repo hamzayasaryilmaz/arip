@@ -10,8 +10,8 @@ from .directory import DirectoryTraceSource
 from .jsonl import JsonlTraceSource
 
 __all__ = [
+    "DirectoryTraceSource",
+    "JsonlTraceSource",
     "Source",
     "TraceObservation",
-    "JsonlTraceSource",
-    "DirectoryTraceSource",
 ]

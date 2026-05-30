@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -29,7 +29,7 @@ class FailureEvent:
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
-        d["timestamp"] = self.timestamp.astimezone(timezone.utc).isoformat()
+        d["timestamp"] = self.timestamp.astimezone(UTC).isoformat()
         return d
 
     def to_json(self) -> str:

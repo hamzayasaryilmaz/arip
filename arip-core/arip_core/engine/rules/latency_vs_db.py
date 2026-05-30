@@ -11,7 +11,6 @@ from ...correlator.models import CorrelatedTelemetry
 from ..models import Evidence, Hypothesis
 from .base import jaeger_link
 
-
 # A handler that takes >50ms AND >10x its DB span duration is anomalous.
 MIN_HANDLER_US = 50_000
 RATIO_THRESHOLD = 10.0
@@ -48,8 +47,8 @@ class LatencyVsDBRule:
                     kind="span",
                     description=(
                         f"{handler.service_name}.{handler.operation_name} ran for "
-                        f"{handler.duration_us/1000:.1f}ms but its DB work was only "
-                        f"{db_total/1000:.1f}ms (~{ratio:.0f}× ratio). The latency is "
+                        f"{handler.duration_us / 1000:.1f}ms but its DB work was only "
+                        f"{db_total / 1000:.1f}ms (~{ratio:.0f}× ratio). The latency is "
                         "above the DB layer."
                     ),
                     trace_id=handler.trace_id,
@@ -63,7 +62,7 @@ class LatencyVsDBRule:
                     Evidence(
                         kind="span",
                         description=(
-                            f"DB span `{c.operation_name}` took {c.duration_us/1000:.1f}ms"
+                            f"DB span `{c.operation_name}` took {c.duration_us / 1000:.1f}ms"
                         ),
                         trace_id=c.trace_id,
                         span_id=c.span_id,
@@ -77,8 +76,8 @@ class LatencyVsDBRule:
                     title=f"Latency above the database layer in {handler.service_name}",
                     description=(
                         f"`{handler.operation_name}` is slow, but the DB work it "
-                        f"performs is fast ({handler.duration_us/1000:.0f}ms handler "
-                        f"vs {db_total/1000:.0f}ms DB). The bottleneck is not in "
+                        f"performs is fast ({handler.duration_us / 1000:.0f}ms handler "
+                        f"vs {db_total / 1000:.0f}ms DB). The bottleneck is not in "
                         f"PostgreSQL — it is in the handler itself, before or after "
                         f"the DB call. Look for synchronous I/O, sleeps, blocking "
                         f"locks, or external calls."

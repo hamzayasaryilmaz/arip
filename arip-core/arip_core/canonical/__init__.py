@@ -9,12 +9,12 @@ by writing a config, not new rules.
 """
 
 from .config import NormalizationConfig, load_config_yaml
-from .signals import Signals, StateTransition, PoolStats
+from .signals import PoolStats, Signals, StateTransition
 
 __all__ = [
     "NormalizationConfig",
+    "PoolStats",
     "Signals",
     "StateTransition",
-    "PoolStats",
     "load_config_yaml",
 ]

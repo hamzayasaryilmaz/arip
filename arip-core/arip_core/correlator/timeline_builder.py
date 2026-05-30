@@ -17,8 +17,8 @@ What it does, end to end:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Iterable
+from collections.abc import Iterable
+from datetime import UTC, datetime, timedelta
 
 from ..canonical.config import NormalizationConfig
 from ..canonical.signals import Signals
@@ -60,7 +60,11 @@ class TimelineBuilder:
                 "primary trace %s never appeared in jaeger; continuing with empty trace",
                 failure.trace_id,
             )
-        order_id = failure.test_metadata.get("annotations", {}).get("order_id") if failure.test_metadata else None
+        order_id = (
+            failure.test_metadata.get("annotations", {}).get("order_id")
+            if failure.test_metadata
+            else None
+        )
 
         related_ids: list[str] = []
         related_spans: list[Span] = []
@@ -148,7 +152,7 @@ def _build_timeline(
                 timestamp=s.start_time,
                 kind="span_start",
                 service=s.service_name,
-                summary=f"{s.operation_name} ({s.duration_us/1000:.1f}ms){' ERROR' if s.is_error else ''}",
+                summary=f"{s.operation_name} ({s.duration_us / 1000:.1f}ms){' ERROR' if s.is_error else ''}",
                 detail={
                     "trace_id": s.trace_id,
                     "span_id": s.span_id,
@@ -191,7 +195,7 @@ def _build_timeline(
                 timestamp=q.timestamp,
                 kind="db_query",
                 service=q.service_name,
-                summary=f"{q.operation} {q.table} ({q.duration_us/1000:.1f}ms)",
+                summary=f"{q.operation} {q.table} ({q.duration_us / 1000:.1f}ms)",
                 detail={"trace_id": q.trace_id, "span_id": q.span_id},
             )
         )
@@ -201,4 +205,4 @@ def _build_timeline(
 
 
 def _ensure_aware(dt: datetime) -> datetime:
-    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt if dt.tzinfo else dt.replace(tzinfo=UTC)

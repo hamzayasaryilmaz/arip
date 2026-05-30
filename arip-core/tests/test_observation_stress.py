@@ -11,11 +11,8 @@ hold in the wild.
 from __future__ import annotations
 
 import gzip
-import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-
-import pytest
 
 from arip_core.observation.digest import build_digest, render_digest
 from arip_core.observation.pipeline import observe
@@ -23,19 +20,14 @@ from arip_core.observation.sources import JsonlTraceSource
 from arip_core.observation.store import ObservationStore
 
 from .fixtures.synthetic_telemetry import (
-    BASE,
     burst_outage_traces,
     cascading_failure_traces,
-    downstream_error_trace,
     healthy_trace,
     mixed_noise_traces,
     orphan_span_trace,
-    pool_exhaustion_trace,
-    retry_storm_trace,
     write_jsonl,
     write_truncated_jsonl,
 )
-
 
 # ---------- 1. Burst outage cluster stability ----------------------
 
@@ -62,8 +54,7 @@ def test_burst_outage_collapses_to_one_rule_cluster(tmp_path: Path) -> None:
     # attempt-count variation must not split the cluster.
     rule_fps = {c.fingerprint for c in rule_clusters}
     assert len(rule_fps) <= 1, (
-        f"burst outage should collapse to ≤ 1 rule cluster; got "
-        f"{len(rule_fps)} fingerprints"
+        f"burst outage should collapse to ≤ 1 rule cluster; got {len(rule_fps)} fingerprints"
     )
 
 
@@ -206,9 +197,7 @@ def test_gzipped_archive_processes_same_as_plain(tmp_path: Path) -> None:
         out.write(plain.read_bytes())
 
     store_plain = ObservationStore(tmp_path / "plain.db")
-    s_plain = observe(
-        source=JsonlTraceSource(plain), store=store_plain, budget=100
-    )
+    s_plain = observe(source=JsonlTraceSource(plain), store=store_plain, budget=100)
 
     store_gz = ObservationStore(tmp_path / "gz.db")
     s_gz = observe(source=JsonlTraceSource(gz), store=store_gz, budget=100)
@@ -371,6 +360,41 @@ def test_low_quality_telemetry_does_not_promote_rule_clusters(tmp_path: Path) ->
 # ---------- 11. Determinism: same input → same fingerprints ---------
 
 
+def test_pipeline_handles_empty_cursor_on_fresh_source(tmp_path: Path) -> None:
+    """Regression for type-hole #1 (mypy --strict): if the first
+    observation of a fresh source has an empty `cursor_after` (no
+    prior cursor saved, no cursor on the bundle), the pipeline used
+    to pass None to `save_cursor`, which would crash the NOT NULL
+    column. Now: cursor save is skipped silently.
+    """
+    from arip_core.observation.sources.base import TraceObservation
+
+    class _EmptyCursorSource:
+        name = "test://empty-cursor"
+
+        def stream(self, *, cursor, budget):
+            # Yield one observation with NO spans (so the empty-cursor
+            # path is hit) AND empty cursor_after string.
+            yield TraceObservation(
+                source_name=self.name,
+                observation_id="ec-0001",
+                trace_id="t-ec-0001",
+                spans=[],
+                logs=[],
+                observed_at=None,
+                cursor_after="",  # explicitly empty
+            )
+
+    store = ObservationStore(tmp_path / "obs.db")
+    # Should not raise.
+    summary = observe(source=_EmptyCursorSource(), store=store, budget=10)
+    assert summary.traces_observed == 1
+    assert summary.events_new == 0
+    # Cursor should remain None — save was correctly skipped, not
+    # written as None which would have crashed.
+    assert store.load_cursor("test://empty-cursor") is None
+
+
 def test_abstention_fingerprint_collapses_high_service_count(tmp_path: Path) -> None:
     """Regression for op002 (OTel Demo) finding: a multi-service mesh
     where different requests touch different SUBSETS of services must
@@ -386,7 +410,7 @@ def test_abstention_fingerprint_collapses_high_service_count(tmp_path: Path) -> 
     # Build 50 traces. All have entry-point span on "frontend".
     # Vary which downstream services are touched per trace — this is
     # exactly the OTel Demo pathology.
-    base = datetime(2026, 5, 30, 12, 0, 0, tzinfo=timezone.utc)
+    base = datetime(2026, 5, 30, 12, 0, 0, tzinfo=UTC)
     downstream_combos = [
         ["cart"],
         ["cart", "product-catalog"],
@@ -397,39 +421,45 @@ def test_abstention_fingerprint_collapses_high_service_count(tmp_path: Path) -> 
     for i in range(50):
         tid = f"mesh-{i:04d}"
         combo = downstream_combos[i % len(downstream_combos)]
-        spans = [{
-            "trace_id": tid,
-            "span_id": f"f{i}",
-            "parent_span_id": None,
-            "service_name": "frontend",
-            "operation_name": "GET /api/checkout",
-            "start_time": base.isoformat(),
-            "duration_us": 5000,
-            "status": "OK",
-            "status_message": "",
-            "attributes": {},
-            "events": [],
-        }]
-        for j, svc in enumerate(combo):
-            spans.append({
+        spans = [
+            {
                 "trace_id": tid,
-                "span_id": f"d{i}-{j}",
-                "parent_span_id": f"f{i}",
-                "service_name": svc,
-                "operation_name": f"{svc}.handle",
+                "span_id": f"f{i}",
+                "parent_span_id": None,
+                "service_name": "frontend",
+                "operation_name": "GET /api/checkout",
                 "start_time": base.isoformat(),
-                "duration_us": 1000,
+                "duration_us": 5000,
                 "status": "OK",
                 "status_message": "",
                 "attributes": {},
                 "events": [],
-            })
-        bundles.append({
-            "trace_id": tid,
-            "captured_at": base.isoformat(),
-            "spans": spans,
-            "logs": [],
-        })
+            }
+        ]
+        for j, svc in enumerate(combo):
+            spans.append(
+                {
+                    "trace_id": tid,
+                    "span_id": f"d{i}-{j}",
+                    "parent_span_id": f"f{i}",
+                    "service_name": svc,
+                    "operation_name": f"{svc}.handle",
+                    "start_time": base.isoformat(),
+                    "duration_us": 1000,
+                    "status": "OK",
+                    "status_message": "",
+                    "attributes": {},
+                    "events": [],
+                }
+            )
+        bundles.append(
+            {
+                "trace_id": tid,
+                "captured_at": base.isoformat(),
+                "spans": spans,
+                "logs": [],
+            }
+        )
     write_jsonl(jsonl, bundles)
 
     store = ObservationStore(tmp_path / "obs.db")
@@ -487,7 +517,7 @@ def test_observation_module_does_not_import_side_effect_surfaces() -> None:
     seen_modules: set[str] = set()
 
     def _walk(pkg) -> None:
-        for finder, name, ispkg in pkgutil.iter_modules(pkg.__path__, prefix=pkg.__name__ + "."):
+        for _finder, name, ispkg in pkgutil.iter_modules(pkg.__path__, prefix=pkg.__name__ + "."):
             if name in seen_modules:
                 continue
             seen_modules.add(name)
@@ -505,6 +535,5 @@ def test_observation_module_does_not_import_side_effect_surfaces() -> None:
         text = Path(src).read_text()
         for f in forbidden:
             assert f not in text, (
-                f"observation module {mod_name} imports forbidden "
-                f"side-effect surface {f}"
+                f"observation module {mod_name} imports forbidden side-effect surface {f}"
             )

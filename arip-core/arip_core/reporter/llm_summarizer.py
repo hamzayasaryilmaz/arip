@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 _MODEL = "claude-opus-4-7"
 
 
-def summarize(report: "InvestigationReport") -> str:
+def summarize(report: InvestigationReport) -> str:
     """Return a short summary. Uses Claude when ``ANTHROPIC_API_KEY`` is
     set; otherwise returns a deterministic fallback derived from the
     primary hypothesis."""
@@ -63,7 +63,7 @@ def summarize(report: "InvestigationReport") -> str:
         return _deterministic_summary(report)
 
 
-def _deterministic_summary(report: "InvestigationReport") -> str:
+def _deterministic_summary(report: InvestigationReport) -> str:
     h = report.primary_hypothesis
     assert h is not None
     lines = [f"{h.title}. {h.description.splitlines()[0]}"]
@@ -72,7 +72,7 @@ def _deterministic_summary(report: "InvestigationReport") -> str:
     return " ".join(lines)
 
 
-def _build_prompt(report: "InvestigationReport") -> str:
+def _build_prompt(report: InvestigationReport) -> str:
     h = report.primary_hypothesis
     assert h is not None
     parts = [

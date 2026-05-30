@@ -56,12 +56,12 @@ class PoolStats:
 class Signals:
     """Read canonical signals from raw spans + logs using a config."""
 
-    def __init__(self, config: "NormalizationConfig") -> None:
+    def __init__(self, config: NormalizationConfig) -> None:
         self.config = config
 
     # ─── Business key ────────────────────────────────────────────────
 
-    def business_key_for(self, span: "Span") -> str | None:
+    def business_key_for(self, span: Span) -> str | None:
         """Return the business-key value (e.g. order_id) on this span,
         searching the configured attribute names in priority order."""
         for attr in self.config.business_key_attrs:
@@ -75,38 +75,35 @@ class Signals:
 
     # ─── Retry signals ───────────────────────────────────────────────
 
-    def retry_attempt(self, span: "Span") -> int | None:
+    def retry_attempt(self, span: Span) -> int | None:
         return _as_int(span.attributes.get(self.config.retry_attempt_attr))
 
-    def retry_max_attempts(self, span: "Span") -> int | None:
+    def retry_max_attempts(self, span: Span) -> int | None:
         return _as_int(span.attributes.get(self.config.retry_max_attempts_attr))
 
-    def retry_backoff_ms(self, span: "Span") -> int | None:
+    def retry_backoff_ms(self, span: Span) -> int | None:
         return _as_int(span.attributes.get(self.config.retry_backoff_attr))
 
-    def retry_reason(self, span: "Span") -> str | None:
+    def retry_reason(self, span: Span) -> str | None:
         v = span.attributes.get(self.config.retry_reason_attr)
         return str(v) if v is not None else None
 
-    def retry_policy(self, span: "Span") -> str | None:
+    def retry_policy(self, span: Span) -> str | None:
         v = span.attributes.get(self.config.retry_policy_attr)
         return str(v) if v is not None else None
 
     # ─── DB signals ──────────────────────────────────────────────────
 
-    def is_db_span(self, span: "Span") -> bool:
+    def is_db_span(self, span: Span) -> bool:
         if self.config.db_system_attr in span.attributes:
             return True
         op = span.operation_name
-        for pattern in self.config.db_operation_patterns:
-            if pattern and pattern in op:
-                return True
-        return False
+        return any(pattern and pattern in op for pattern in self.config.db_operation_patterns)
 
-    def is_db_acquire_span(self, span: "Span") -> bool:
+    def is_db_acquire_span(self, span: Span) -> bool:
         return span.operation_name in self.config.db_acquire_operation_names
 
-    def pool_stats(self, span: "Span") -> PoolStats | None:
+    def pool_stats(self, span: Span) -> PoolStats | None:
         """Return canonical PoolStats if this span carries any pool
         attribute, otherwise None."""
         a = span.attributes
@@ -133,7 +130,7 @@ class Signals:
 
     # ─── HTTP signals ────────────────────────────────────────────────
 
-    def http_status(self, span: "Span") -> int | None:
+    def http_status(self, span: Span) -> int | None:
         for attr in self.config.http_status_attrs:
             v = _as_int(span.attributes.get(attr))
             if v is not None:
@@ -142,13 +139,13 @@ class Signals:
 
     # ─── Handler identification ──────────────────────────────────────
 
-    def is_handler_span(self, span: "Span") -> bool:
+    def is_handler_span(self, span: Span) -> bool:
         op = span.operation_name
         return any(p and p in op for p in self.config.handler_operation_patterns)
 
     # ─── State transitions ───────────────────────────────────────────
 
-    def state_transitions(self, span: "Span") -> list[StateTransition]:
+    def state_transitions(self, span: Span) -> list[StateTransition]:
         """Return all state-transition events on this span as canonical
         StateTransition records."""
         if not self.config.state_transition_event_name:
@@ -173,8 +170,10 @@ class Signals:
                     # entity_id on the event takes precedence (when both are present)
                     entity_id=_as_str(
                         fields.get(self.config.business_key_attrs[0])
-                        if self.config.business_key_attrs else None
-                    ) or entity,
+                        if self.config.business_key_attrs
+                        else None
+                    )
+                    or entity,
                 )
             )
         return out

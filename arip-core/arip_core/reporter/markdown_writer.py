@@ -122,7 +122,7 @@ def render(report: InvestigationReport) -> str:
 
 def _render_quality(w, q) -> None:
     BAND_BADGE = {"high": "🟢", "medium": "🟡", "low": "🔴"}
-    w(f"## Environment quality\n\n")
+    w("## Environment quality\n\n")
     w(
         f"{BAND_BADGE.get(q.confidence_band, '⚪')} **{q.confidence_band}-confidence "
         f"environment** · overall score **{q.score:.2f}**\n\n"
@@ -152,7 +152,7 @@ def _render_quality(w, q) -> None:
         w("\n")
     if q.rules_will_not_fire:
         w(
-            f"**Rules that cannot fire on this telemetry:** "
+            "**Rules that cannot fire on this telemetry:** "
             + ", ".join(f"`{r}`" for r in q.rules_will_not_fire)
             + "  (their required signals are absent — silent no-op, not a bug).\n\n"
         )
@@ -160,13 +160,10 @@ def _render_quality(w, q) -> None:
 
 def _render_history(w, h: HistoryContext) -> None:
     parts = [
-        f"This same root-cause shape has been seen **{h.occurrences_total}** time(s) "
-        f"by ARIP",
+        f"This same root-cause shape has been seen **{h.occurrences_total}** time(s) by ARIP",
     ]
     if h.occurrences_window:
-        parts.append(
-            f"({h.occurrences_window} of them in the last {h.window_days} days)"
-        )
+        parts.append(f"({h.occurrences_window} of them in the last {h.window_days} days)")
     parts.append(f". Fingerprint: `{h.fingerprint}`.")
     w(" ".join(parts) + "\n\n")
     if h.first_seen:
@@ -216,7 +213,7 @@ def _render_evidence(ev: Evidence) -> str:
 def timeline_summary_from_items(items, limit: int = 40) -> str:
     """Render the first ``limit`` timeline items as a compact text block."""
     lines: list[str] = []
-    for i, item in enumerate(items[:limit]):
+    for _i, item in enumerate(items[:limit]):
         ts = item.timestamp.strftime("%H:%M:%S.%f")[:-3]
         lines.append(f"{ts}  {item.kind:11s}  [{item.service:20s}]  {item.summary}")
     if len(items) > limit:

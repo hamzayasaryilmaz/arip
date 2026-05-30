@@ -8,9 +8,10 @@ observation, not per batch.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Iterator, Protocol
+from typing import Protocol
 
 from ...correlator.models import LogEntry, Span
 
@@ -31,9 +32,7 @@ class Source(Protocol):
 
     name: str
 
-    def stream(
-        self, *, cursor: str | None, budget: int
-    ) -> Iterator[TraceObservation]:
+    def stream(self, *, cursor: str | None, budget: int) -> Iterator[TraceObservation]:
         """Yield up to ``budget`` observations starting after ``cursor``.
 
         Implementations MUST be:

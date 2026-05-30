@@ -15,7 +15,7 @@ assessment) — not by adding scenario-specific guards.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -24,7 +24,7 @@ from arip_core.correlator.models import CorrelatedTelemetry, LogEntry, Span
 from arip_core.engine.hypothesis import investigate
 from arip_core.quality.assessment import assess
 
-NOW = datetime(2026, 5, 20, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 5, 20, 12, 0, 0, tzinfo=UTC)
 
 
 def _failure(trace_id="t-primary", assertion="x", order_id="ORD-1"):
@@ -141,9 +141,7 @@ def test_scenario_orphan_spans_do_not_cause_false_chain():
 
     # Quality assessment must flag the orphan as a propagation issue.
     q = assess(ct)
-    propagation = next(
-        (c for c in q.coverages if c.signal == "propagation_health"), None
-    )
+    propagation = next((c for c in q.coverages if c.signal == "propagation_health"), None)
     assert propagation is not None
     assert propagation.satisfied < propagation.applicable
 
@@ -196,9 +194,7 @@ def test_scenario_http_5xx_without_otel_error_quality_drops():
     _no_false_high_confidence(result)
 
     q = assess(ct)
-    finding = next(
-        (f for f in q.findings if f.signal == "error_status_consistency"), None
-    )
+    finding = next((f for f in q.findings if f.signal == "error_status_consistency"), None)
     assert finding is not None
     assert "HTTP-error span" in finding.message
 
@@ -259,38 +255,49 @@ def test_scenario_inconsistent_business_key_naming_partial_correlation():
 # ── Scenario 8: quality scores correlate with rule readiness ─────────
 
 
-@pytest.mark.parametrize("pathology, expected_band", [
-    ("rich",  "high"),
-    ("thin",  "low"),
-])
+@pytest.mark.parametrize(
+    "pathology, expected_band",
+    [
+        ("rich", "high"),
+        ("thin", "low"),
+    ],
+)
 def test_quality_score_correlates_with_telemetry_richness(pathology, expected_band):
     if pathology == "rich":
         # A clean retry_storm trace: all signals, proper propagation,
         # correlated logs.
         spans = [
             _span(
-                op="checkout.process", span_id="root", parent=None,
+                op="checkout.process",
+                span_id="root",
+                parent=None,
                 status="ERROR",
                 attributes={"order.id": "ORD-1"},
             ),
             _span(
-                op="HTTP POST", span_id="hp", parent="root",
+                op="HTTP POST",
+                span_id="hp",
+                parent="root",
                 status="ERROR",
                 attributes={"http.response.status_code": 503},
             ),
             _span(
                 op="inventory.handle_reserve",
                 service="inventory-service",
-                span_id="inv", parent="hp",
+                span_id="inv",
+                parent="hp",
                 status="ERROR",
                 attributes={"order.id": "ORD-1"},
             ),
         ]
         logs = [
             LogEntry(
-                timestamp=NOW, service_name="inventory",
-                level="ERROR", message="reserve failed",
-                trace_id=spans[0].trace_id, fields={"order_id": "ORD-1"},
+                timestamp=NOW,
+                service_name="inventory",
+                level="ERROR",
+                message="reserve failed",
+                trace_id=spans[0].trace_id,
+                fields={"order_id": "ORD-1"},
             ),
         ]
     else:

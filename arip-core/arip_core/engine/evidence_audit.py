@@ -34,7 +34,9 @@ def audit_and_clean(ct: CorrelatedTelemetry, hypotheses: list[Hypothesis]) -> li
         returned list — unsupported claims are not surfaced.
       * Confidence is decayed proportionally to how much evidence was lost.
     """
-    known_trace_ids = {s.trace_id for s in ct.spans} | set(ct.related_trace_ids) | {ct.primary_trace_id}
+    known_trace_ids = (
+        {s.trace_id for s in ct.spans} | set(ct.related_trace_ids) | {ct.primary_trace_id}
+    )
     known_span_ids = {s.span_id for s in ct.spans}
     # Logs we can't reliably "address by id" — they're whole records.
     # We trust log evidence as long as the (service, message) combination

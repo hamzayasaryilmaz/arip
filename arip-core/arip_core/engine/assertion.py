@@ -16,19 +16,26 @@ from dataclasses import replace
 
 from .models import Hypothesis
 
-
 # What an assertion's free-text typically signals.
 _LATENCY_KEYS = ("ms", "sla", "latency", "within", "second", "timeout", "complete in", "respond")
 _STATUS_KEYS = ("status", "200", "503", "5xx", "4xx", "success", "returns", "returned", "ok ")
-_CORRECTNESS_KEYS = ("interleaved", "consistent", "race", "history", "invariant", "transition", "state ")
+_CORRECTNESS_KEYS = (
+    "interleaved",
+    "consistent",
+    "race",
+    "history",
+    "invariant",
+    "transition",
+    "state ",
+)
 _RETRY_KEYS = ("retry", "retries", "attempt", "exhaust")
 
 # Which rule's signature aligns with which assertion category.
 RULE_ALIGNMENT: dict[str, set[str]] = {
-    "latency_vs_db":           {"latency"},
-    "db_pool_exhaustion":      {"latency", "status"},
-    "downstream_error":        {"status"},
-    "retry_storm":             {"status", "retry"},
+    "latency_vs_db": {"latency"},
+    "db_pool_exhaustion": {"latency", "status"},
+    "downstream_error": {"status"},
+    "retry_storm": {"status", "retry"},
     "concurrent_modification": {"correctness"},
 }
 

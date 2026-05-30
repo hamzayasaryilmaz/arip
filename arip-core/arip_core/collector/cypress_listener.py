@@ -42,10 +42,11 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterator
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from .failure_event import FailureEvent
 
@@ -88,8 +89,7 @@ def _extract_trace_id(*sources: str | None) -> str | None:
 
 def _walk_tests(node: dict[str, Any]) -> Iterator[dict[str, Any]]:
     """Yield every test in a (possibly-nested) Cypress result node."""
-    for test in node.get("tests", []) or []:
-        yield test
+    yield from node.get("tests", []) or []
     for suite in node.get("suites", []) or []:
         yield from _walk_tests(suite)
 
@@ -129,7 +129,7 @@ def _parse_timestamp(report: dict[str, Any], test: dict[str, Any]) -> datetime:
             return datetime.fromisoformat(str(run_start).replace("Z", "+00:00"))
         except ValueError:
             pass
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def parse_report(report_path: str | Path, environment: str = "cypress") -> list[FailureEvent]:

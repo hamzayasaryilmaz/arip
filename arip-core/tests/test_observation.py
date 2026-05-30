@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import gzip
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -26,8 +26,7 @@ from arip_core.observation.sources import (
 )
 from arip_core.observation.store import ObservationStore
 
-
-NOW = datetime(2026, 5, 18, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 5, 18, 12, 0, 0, tzinfo=UTC)
 
 
 # ---------- fixture helpers ----------------------------------------
@@ -65,9 +64,9 @@ def _retry_attempt_span(
 
 def _retry_storm_bundle(trace_id: str, *, captured_at: datetime) -> dict[str, Any]:
     spans = [
-        _retry_attempt_span(trace_id=trace_id, span_id=f"a{i}", n=i,
-                            backoff_ms=50 * (2 ** (i - 1)),
-                            start_ms=10 * i)
+        _retry_attempt_span(
+            trace_id=trace_id, span_id=f"a{i}", n=i, backoff_ms=50 * (2 ** (i - 1)), start_ms=10 * i
+        )
         for i in range(1, 6)
     ]
     logs = [
@@ -125,8 +124,7 @@ def _write_jsonl(path: Path, bundles: list[dict[str, Any]]) -> None:
 def test_idempotent_ingestion_same_file_run_twice(tmp_path: Path) -> None:
     jsonl = tmp_path / "telemetry.jsonl"
     bundles = [
-        _retry_storm_bundle(f"trace-{i}", captured_at=NOW + timedelta(minutes=i))
-        for i in range(3)
+        _retry_storm_bundle(f"trace-{i}", captured_at=NOW + timedelta(minutes=i)) for i in range(3)
     ]
     _write_jsonl(jsonl, bundles)
 
@@ -148,8 +146,7 @@ def test_idempotent_ingestion_same_file_run_twice(tmp_path: Path) -> None:
 def test_cursor_resumes_partial_run(tmp_path: Path) -> None:
     jsonl = tmp_path / "telemetry.jsonl"
     bundles = [
-        _retry_storm_bundle(f"trace-{i}", captured_at=NOW + timedelta(minutes=i))
-        for i in range(5)
+        _retry_storm_bundle(f"trace-{i}", captured_at=NOW + timedelta(minutes=i)) for i in range(5)
     ]
     _write_jsonl(jsonl, bundles)
 
@@ -176,9 +173,8 @@ def test_jsonl_gz_source(tmp_path: Path) -> None:
     _write_jsonl(raw, bundles)
 
     gz = tmp_path / "telemetry.jsonl.gz"
-    with gz.open("wb") as out:
-        with gzip.open(out, "wb") as gout:  # type: ignore[arg-type]
-            gout.write(raw.read_bytes())
+    with gz.open("wb") as out, gzip.open(out, "wb") as gout:  # type: ignore[arg-type]
+        gout.write(raw.read_bytes())
 
     store = ObservationStore(tmp_path / "observation.db")
     s = observe(source=JsonlTraceSource(gz), store=store, budget=10)
@@ -214,8 +210,7 @@ def test_retry_storm_cluster_recurrence(tmp_path: Path) -> None:
     jsonl = tmp_path / "telemetry.jsonl"
     # 4 identical-shape retry_storm traces.
     bundles = [
-        _retry_storm_bundle(f"trace-{i}", captured_at=NOW + timedelta(minutes=i))
-        for i in range(4)
+        _retry_storm_bundle(f"trace-{i}", captured_at=NOW + timedelta(minutes=i)) for i in range(4)
     ]
     _write_jsonl(jsonl, bundles)
 
@@ -233,8 +228,7 @@ def test_retry_storm_cluster_recurrence(tmp_path: Path) -> None:
 def test_abstention_cluster_recorded(tmp_path: Path) -> None:
     jsonl = tmp_path / "telemetry.jsonl"
     bundles = [
-        _empty_trace_bundle(f"ok-{i}", captured_at=NOW + timedelta(minutes=i))
-        for i in range(2)
+        _empty_trace_bundle(f"ok-{i}", captured_at=NOW + timedelta(minutes=i)) for i in range(2)
     ]
     _write_jsonl(jsonl, bundles)
 
@@ -277,8 +271,7 @@ def test_quality_band_propagates(tmp_path: Path) -> None:
 def test_digest_contains_rule_cluster_and_disclaimer(tmp_path: Path) -> None:
     jsonl = tmp_path / "telemetry.jsonl"
     bundles = [
-        _retry_storm_bundle(f"trace-{i}", captured_at=NOW + timedelta(minutes=i))
-        for i in range(3)
+        _retry_storm_bundle(f"trace-{i}", captured_at=NOW + timedelta(minutes=i)) for i in range(3)
     ]
     _write_jsonl(jsonl, bundles)
 

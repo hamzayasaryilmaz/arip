@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -14,7 +14,7 @@ from arip_core.memory.flaky import FlakyClassifier
 from arip_core.memory.store import MemoryStore
 from arip_core.reporter.models import InvestigationReport
 
-NOW = datetime(2026, 5, 18, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 5, 18, 12, 0, 0, tzinfo=UTC)
 
 
 @pytest.fixture()
@@ -24,20 +24,32 @@ def store(tmp_path: Path) -> MemoryStore:
 
 def _h(rule_id: str, services: list[str], kinds: list[str]) -> Hypothesis:
     evidence = [
-        Evidence(kind=k, description="d", trace_id="tp", span_id="s", service=services[i % len(services)])
+        Evidence(
+            kind=k, description="d", trace_id="tp", span_id="s", service=services[i % len(services)]
+        )
         for i, k in enumerate(kinds)
     ]
     return Hypothesis(
-        title="t", description="d", confidence=0.9, severity="high",
-        rule_id=rule_id, evidence=evidence,
+        title="t",
+        description="d",
+        confidence=0.9,
+        severity="high",
+        rule_id=rule_id,
+        evidence=evidence,
     )
 
 
-def _report(test_name: str, trace_id: str, primary: Hypothesis | None = None) -> InvestigationReport:
+def _report(
+    test_name: str, trace_id: str, primary: Hypothesis | None = None
+) -> InvestigationReport:
     return InvestigationReport(
         failure=FailureEvent(
-            test_name=test_name, timestamp=NOW, environment="ci",
-            trace_id=trace_id, assertion="x", error_message="e",
+            test_name=test_name,
+            timestamp=NOW,
+            environment="ci",
+            trace_id=trace_id,
+            assertion="x",
+            error_message="e",
         ),
         primary_hypothesis=primary,
         alternative_hypotheses=[],
@@ -53,7 +65,11 @@ def _report(test_name: str, trace_id: str, primary: Hypothesis | None = None) ->
 
 
 def test_fingerprint_is_stable():
-    h = _h("concurrent_modification", ["payment-service", "payment-service"], ["span", "span_event", "log"])
+    h = _h(
+        "concurrent_modification",
+        ["payment-service", "payment-service"],
+        ["span", "span_event", "log"],
+    )
     assert fingerprint_hypothesis(h) == fingerprint_hypothesis(h)
 
 
@@ -101,12 +117,14 @@ def test_history_empty_for_unseen_fingerprint(store: MemoryStore):
 
 
 def test_test_run_stats_counts_fails(store: MemoryStore):
-    store.record_test_runs_bulk([
-        ("checkout", "passed", NOW, "ci", None),
-        ("checkout", "failed", NOW - timedelta(minutes=1), "ci", None),
-        ("checkout", "passed", NOW - timedelta(minutes=2), "ci", None),
-        ("other",    "failed", NOW, "ci", None),
-    ])
+    store.record_test_runs_bulk(
+        [
+            ("checkout", "passed", NOW, "ci", None),
+            ("checkout", "failed", NOW - timedelta(minutes=1), "ci", None),
+            ("checkout", "passed", NOW - timedelta(minutes=2), "ci", None),
+            ("other", "failed", NOW, "ci", None),
+        ]
+    )
     considered, fails = store.test_run_stats("checkout", last_n=10)
     assert considered == 3
     assert fails == 1

@@ -117,8 +117,8 @@ class DownstreamErrorRule:
             Hypothesis(
                 rule_id=self.rule_id,
                 title=f"Downstream {downstream} failure propagated upstream"
-                      if fully_propagated
-                      else f"Downstream {downstream} failure observed (recovered upstream)",
+                if fully_propagated
+                else f"Downstream {downstream} failure observed (recovered upstream)",
                 description=(
                     f"The failing request bottomed out in {downstream} with: "
                     f"`{downstream_msg}`. {propagation_phrase}"

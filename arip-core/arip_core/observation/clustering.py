@@ -22,7 +22,7 @@ event is recorded.
 from __future__ import annotations
 
 import hashlib
-from typing import Iterable
+from collections.abc import Iterable
 
 from ..correlator.models import CorrelatedTelemetry
 from ..engine.abstention import AbstentionReason
@@ -30,9 +30,7 @@ from ..engine.hypothesis import InvestigationResult
 from ..memory.fingerprint import fingerprint_hypothesis
 
 
-def fingerprint_for_result(
-    ct: CorrelatedTelemetry, result: InvestigationResult
-) -> str | None:
+def fingerprint_for_result(ct: CorrelatedTelemetry, result: InvestigationResult) -> str | None:
     """Return a stable fingerprint or None if the result is unclusterable."""
     if result.primary is not None:
         return fingerprint_hypothesis(result.primary)
@@ -41,9 +39,7 @@ def fingerprint_for_result(
     return None
 
 
-def _abstention_fingerprint(
-    ct: CorrelatedTelemetry, abstention: AbstentionReason
-) -> str:
+def _abstention_fingerprint(ct: CorrelatedTelemetry, abstention: AbstentionReason) -> str:
     """Abstention fingerprint = (code, entry_service_set).
 
     `entry_service_set` is the set of services that own *entry-point*
@@ -83,8 +79,7 @@ def _entry_point_services(ct: CorrelatedTelemetry) -> set[str]:
     entries = {
         s.service_name
         for s in ct.spans
-        if s.service_name
-        and (not s.parent_span_id or s.parent_span_id not in span_ids)
+        if s.service_name and (not s.parent_span_id or s.parent_span_id not in span_ids)
     }
     if entries:
         return entries
@@ -104,9 +99,7 @@ def operation_names(ct: CorrelatedTelemetry, limit: int = 8) -> tuple[str, ...]:
 
 def evidence_kinds(result: InvestigationResult) -> tuple[str, ...]:
     """Evidence kinds across the primary (if any) or all candidates."""
-    candidates: Iterable = (
-        [result.primary] if result.primary else result.all_ranked
-    )
+    candidates: Iterable = [result.primary] if result.primary else result.all_ranked
     kinds: set[str] = set()
     for h in candidates:
         if h is None:

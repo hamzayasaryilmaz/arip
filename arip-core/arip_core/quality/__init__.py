@@ -14,11 +14,11 @@ from .assessment import (
 from .contracts import RULE_CONTRACTS, RuleContract, contracts_for_rule
 
 __all__ = [
+    "RULE_CONTRACTS",
     "QualityAssessment",
     "QualityFinding",
+    "RuleContract",
     "SignalCoverage",
     "assess",
-    "RuleContract",
-    "RULE_CONTRACTS",
     "contracts_for_rule",
 ]

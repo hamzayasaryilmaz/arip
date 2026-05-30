@@ -16,7 +16,7 @@ Guarantees the rule must hold:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from arip_core.collector.failure_event import FailureEvent
 from arip_core.correlator.models import CorrelatedTelemetry, LogEntry, Span
@@ -25,13 +25,17 @@ from arip_core.engine.rules.retry_storm import RetryStormRule
 # re-exported for tests below
 __all__ = ["Span"]
 
-NOW = datetime(2026, 5, 19, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 5, 19, 12, 0, 0, tzinfo=UTC)
 
 
 def _failure() -> FailureEvent:
     return FailureEvent(
-        test_name="t", timestamp=NOW, environment="test",
-        trace_id="tp", assertion="x", error_message="boom",
+        test_name="t",
+        timestamp=NOW,
+        environment="test",
+        trace_id="tp",
+        assertion="x",
+        error_message="boom",
     )
 
 
@@ -191,14 +195,22 @@ def test_silent_when_attempts_in_different_operations():
         _span(
             op="inventory.reserve_attempt",
             span_id="a",
-            attributes={"retry.attempt": 1, "retry.max_attempts": 5,
-                        "retry.backoff_ms": 0, "retry.policy": "exponential"},
+            attributes={
+                "retry.attempt": 1,
+                "retry.max_attempts": 5,
+                "retry.backoff_ms": 0,
+                "retry.policy": "exponential",
+            },
         ),
         _span(
             op="auth.verify_attempt",
             span_id="b",
-            attributes={"retry.attempt": 1, "retry.max_attempts": 5,
-                        "retry.backoff_ms": 0, "retry.policy": "exponential"},
+            attributes={
+                "retry.attempt": 1,
+                "retry.max_attempts": 5,
+                "retry.backoff_ms": 0,
+                "retry.policy": "exponential",
+            },
         ),
     ]
     assert RetryStormRule().evaluate(_ct(spans)) == []
@@ -229,8 +241,11 @@ def test_confidence_increases_with_error_log():
     spans = [_attempt(n=1, backoff_ms=0), _attempt(n=2, backoff_ms=50)]
     no_log = RetryStormRule().evaluate(_ct(spans))[0]
     log = LogEntry(
-        timestamp=NOW, service_name="inventory", level="ERROR",
-        message="reserve failed", trace_id="tp",
+        timestamp=NOW,
+        service_name="inventory",
+        level="ERROR",
+        message="reserve failed",
+        trace_id="tp",
         fields={"error": "service temporarily unavailable"},
     )
     with_log = RetryStormRule().evaluate(_ct(spans, logs=[log]))[0]
@@ -262,10 +277,15 @@ def test_partial_failure_does_not_claim_persistent():
         _attempt(n=1, backoff_ms=0, status="ERROR"),
         # second attempt: success, no retry.reason, no ERROR status
         Span(
-            trace_id="tp", span_id="a2", parent_span_id=None,
-            service_name="payment-service", operation_name="inventory.reserve_attempt",
-            start_time=NOW, duration_us=3_000,
-            status="OK", status_message="",
+            trace_id="tp",
+            span_id="a2",
+            parent_span_id=None,
+            service_name="payment-service",
+            operation_name="inventory.reserve_attempt",
+            start_time=NOW,
+            duration_us=3_000,
+            status="OK",
+            status_message="",
             attributes={
                 "retry.attempt": 2,
                 "retry.max_attempts": 5,

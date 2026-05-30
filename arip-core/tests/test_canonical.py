@@ -16,7 +16,7 @@ What this proves:
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -28,14 +28,18 @@ from arip_core.correlator.models import CorrelatedTelemetry, Span
 from arip_core.engine.rules.retry_storm import RetryStormRule
 from arip_core.engine.rules.webhook_race import WebhookRaceRule
 
-NOW = datetime(2026, 5, 19, 12, 0, 0, tzinfo=timezone.utc)
+NOW = datetime(2026, 5, 19, 12, 0, 0, tzinfo=UTC)
 
 
 def _ct(spans, config=None):
     return CorrelatedTelemetry(
         failure=FailureEvent(
-            test_name="t", timestamp=NOW, environment="test",
-            trace_id="tp", assertion="x", error_message="boom",
+            test_name="t",
+            timestamp=NOW,
+            environment="test",
+            trace_id="tp",
+            assertion="x",
+            error_message="boom",
         ),
         logs=[],
         spans=spans,
@@ -47,16 +51,31 @@ def _ct(spans, config=None):
     )
 
 
-def _span(*, op, service="payment-service", span_id="s", parent=None,
-          duration_us=1_000, status="OK", attrs=None, events=None,
-          trace_id="tp", start_ms=0):
+def _span(
+    *,
+    op,
+    service="payment-service",
+    span_id="s",
+    parent=None,
+    duration_us=1_000,
+    status="OK",
+    attrs=None,
+    events=None,
+    trace_id="tp",
+    start_ms=0,
+):
     return Span(
-        trace_id=trace_id, span_id=span_id, parent_span_id=parent,
-        service_name=service, operation_name=op,
+        trace_id=trace_id,
+        span_id=span_id,
+        parent_span_id=parent,
+        service_name=service,
+        operation_name=op,
         start_time=NOW + timedelta(milliseconds=start_ms),
         duration_us=duration_us,
-        status=status, status_message="",
-        attributes=attrs or {}, events=events or [],
+        status=status,
+        status_message="",
+        attributes=attrs or {},
+        events=events or [],
     )
 
 
@@ -100,12 +119,15 @@ def test_signals_pool_stats_returns_none_when_no_pool_attrs():
 
 def test_signals_pool_stats_at_capacity_computed():
     sig = Signals(NormalizationConfig())
-    s = _span(op="db.acquire_connection", attrs={
-        "db.system": "postgresql",
-        "db.pool.acquired": 3,
-        "db.pool.max": 3,
-        "db.pool.wait_ms": 1500,
-    })
+    s = _span(
+        op="db.acquire_connection",
+        attrs={
+            "db.system": "postgresql",
+            "db.pool.acquired": 3,
+            "db.pool.max": 3,
+            "db.pool.wait_ms": 1500,
+        },
+    )
     stats = sig.pool_stats(s)
     assert stats is not None
     assert stats.at_capacity is True
@@ -138,14 +160,16 @@ def test_signals_state_transitions_uses_configured_event_name():
     s = _span(
         op="x",
         attrs={"entity.id": "E-1"},
-        events=[{
-            "timestamp": NOW,
-            "fields": {
-                "event": "domain.event.state_changed",
-                "domain.from_state": "pending",
-                "domain.to_state": "confirmed",
-            },
-        }],
+        events=[
+            {
+                "timestamp": NOW,
+                "fields": {
+                    "event": "domain.event.state_changed",
+                    "domain.from_state": "pending",
+                    "domain.to_state": "confirmed",
+                },
+            }
+        ],
     )
     transitions = sig.state_transitions(s)
     assert len(transitions) == 1
@@ -242,19 +266,44 @@ def test_concurrent_modification_fires_with_foreign_business_key():
         state_transition_to_attr="state.to",
     )
     outer = _span(
-        op="checkout.process", trace_id="t-co", span_id="co",
-        start_ms=0, duration_us=300_000,
+        op="checkout.process",
+        trace_id="t-co",
+        span_id="co",
+        start_ms=0,
+        duration_us=300_000,
         attrs={"tenant.id": "T-1"},
         events=[
-            {"timestamp": NOW, "fields": {"event": "state.transition", "state.from": "", "state.to": "pending"}},
-            {"timestamp": NOW + timedelta(milliseconds=300), "fields": {"event": "state.transition", "state.from": "pending", "state.to": "confirmed"}},
+            {
+                "timestamp": NOW,
+                "fields": {"event": "state.transition", "state.from": "", "state.to": "pending"},
+            },
+            {
+                "timestamp": NOW + timedelta(milliseconds=300),
+                "fields": {
+                    "event": "state.transition",
+                    "state.from": "pending",
+                    "state.to": "confirmed",
+                },
+            },
         ],
     )
     inner = _span(
-        op="webhook.process", trace_id="t-wh", span_id="wh",
-        start_ms=50, duration_us=1_000,
+        op="webhook.process",
+        trace_id="t-wh",
+        span_id="wh",
+        start_ms=50,
+        duration_us=1_000,
         attrs={"tenant.id": "T-1"},
-        events=[{"timestamp": NOW + timedelta(milliseconds=50), "fields": {"event": "state.transition", "state.from": "pending", "state.to": "paid"}}],
+        events=[
+            {
+                "timestamp": NOW + timedelta(milliseconds=50),
+                "fields": {
+                    "event": "state.transition",
+                    "state.from": "pending",
+                    "state.to": "paid",
+                },
+            }
+        ],
     )
     out = WebhookRaceRule().evaluate(_ct([outer, inner], config=cfg))
     assert len(out) == 1
@@ -266,8 +315,11 @@ def test_concurrent_modification_no_ops_when_business_keys_disabled():
     cross-trace correlation rule must silently no-op, not crash."""
     cfg = NormalizationConfig(business_key_attrs=[])
     outer = _span(
-        op="checkout.process", trace_id="t-co", span_id="co",
-        start_ms=0, duration_us=300_000,
+        op="checkout.process",
+        trace_id="t-co",
+        span_id="co",
+        start_ms=0,
+        duration_us=300_000,
         attrs={"order.id": "ORD-1"},
     )
     out = WebhookRaceRule().evaluate(_ct([outer], config=cfg))

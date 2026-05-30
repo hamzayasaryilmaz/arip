@@ -10,8 +10,9 @@ run.
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 
 from .base import TraceObservation
 from .jsonl import _bundle_to_observation
@@ -25,9 +26,7 @@ class DirectoryTraceSource:
         self.glob = glob
         self.name = f"dir://{self.root.resolve()}#{glob}"
 
-    def stream(
-        self, *, cursor: str | None, budget: int
-    ) -> Iterator[TraceObservation]:
+    def stream(self, *, cursor: str | None, budget: int) -> Iterator[TraceObservation]:
         files = sorted(self.root.glob(self.glob))
         # Cursor format: last successfully emitted relative path.
         # Resume from the file *after* it (or the first if cursor is None).

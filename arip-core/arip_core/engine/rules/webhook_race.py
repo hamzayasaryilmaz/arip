@@ -19,8 +19,8 @@ of failure of which "webhook arrived mid-checkout" is one example.
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Iterable
 
 from ...correlator.models import CorrelatedTelemetry, LogEntry, Span
 from ..models import Evidence, Hypothesis
@@ -83,10 +83,7 @@ class WebhookRaceRule:
                 hypotheses.append(
                     Hypothesis(
                         rule_id=self.rule_id,
-                        title=(
-                            f"Concurrent modification across `{outer_op}` "
-                            f"and `{inner_op}`"
-                        ),
+                        title=(f"Concurrent modification across `{outer_op}` and `{inner_op}`"),
                         description=(
                             f"Two separate traces mutated order `{order_id}` while "
                             f"overlapping in time by ~{overlap:.0f}ms. The longer "

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Sequence
 
 
 @dataclass(frozen=True)
@@ -24,7 +24,7 @@ class CanonicalAnomalyEvent:
     observed_at: datetime
     rule_id: str | None
     abstention_code: str | None
-    quality_band: str          # 'high' | 'medium' | 'low'
+    quality_band: str  # 'high' | 'medium' | 'low'
     quality_score: float
     primary_confidence: float | None
     service_set: tuple[str, ...]

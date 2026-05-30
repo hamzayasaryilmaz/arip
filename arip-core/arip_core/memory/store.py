@@ -15,10 +15,10 @@ Stored as SQLite because:
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Iterator
 
 from ..reporter.models import HistoryContext, InvestigationReport
 
@@ -93,7 +93,7 @@ class MemoryStore:
                 (
                     report.failure.test_name,
                     report.failure.trace_id,
-                    report.failure.timestamp.astimezone(timezone.utc).isoformat(),
+                    report.failure.timestamp.astimezone(UTC).isoformat(),
                     report.failure.environment,
                     fingerprint,
                     prim.rule_id if prim else None,
@@ -120,21 +120,20 @@ class MemoryStore:
                 (
                     test_name,
                     status,
-                    timestamp.astimezone(timezone.utc).isoformat(),
+                    timestamp.astimezone(UTC).isoformat(),
                     environment,
                     trace_id,
                 ),
             )
 
-    def record_test_runs_bulk(self, rows: list[tuple[str, str, datetime, str | None, str | None]]) -> None:
+    def record_test_runs_bulk(
+        self, rows: list[tuple[str, str, datetime, str | None, str | None]]
+    ) -> None:
         with self._conn() as c:
             c.executemany(
                 """INSERT INTO test_runs (test_name, status, timestamp, environment, trace_id)
                    VALUES (?, ?, ?, ?, ?)""",
-                [
-                    (n, s, t.astimezone(timezone.utc).isoformat(), env, tid)
-                    for (n, s, t, env, tid) in rows
-                ],
+                [(n, s, t.astimezone(UTC).isoformat(), env, tid) for (n, s, t, env, tid) in rows],
             )
 
     # --- reads --------------------------------------------------------
@@ -144,7 +143,7 @@ class MemoryStore:
         fingerprint: str,
         window_days: int = 14,
     ) -> HistoryContext:
-        cutoff = (datetime.now(tz=timezone.utc) - timedelta(days=window_days)).isoformat()
+        cutoff = (datetime.now(tz=UTC) - timedelta(days=window_days)).isoformat()
         with self._conn() as c:
             rows = c.execute(
                 "SELECT timestamp, test_name FROM investigations WHERE fingerprint = ? ORDER BY timestamp",

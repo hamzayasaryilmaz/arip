@@ -95,10 +95,12 @@ class NormalizationConfig:
             "name": self.name,
             "business_keys_configured": bool(self.business_key_attrs),
             "retry_signals_configured": bool(self.retry_attempt_attr),
-            "db_pool_signals_configured": all([
-                self.db_pool_acquired_attr,
-                self.db_pool_max_attr,
-            ]),
+            "db_pool_signals_configured": all(
+                [
+                    self.db_pool_acquired_attr,
+                    self.db_pool_max_attr,
+                ]
+            ),
             "state_transitions_configured": bool(self.state_transition_event_name),
         }
 
@@ -127,20 +129,26 @@ def _config_from_dict(data: dict[str, Any], source_name: str) -> NormalizationCo
         cfg.business_key_attrs = list(data["business_keys"])
 
     retry = data.get("retry") or {}
-    cfg.retry_attempt_attr      = retry.get("attempt_attr",       cfg.retry_attempt_attr)
-    cfg.retry_max_attempts_attr = retry.get("max_attempts_attr",  cfg.retry_max_attempts_attr)
-    cfg.retry_backoff_attr      = retry.get("backoff_attr",       cfg.retry_backoff_attr)
-    cfg.retry_reason_attr       = retry.get("reason_attr",        cfg.retry_reason_attr)
-    cfg.retry_policy_attr       = retry.get("policy_attr",        cfg.retry_policy_attr)
+    cfg.retry_attempt_attr = retry.get("attempt_attr", cfg.retry_attempt_attr)
+    cfg.retry_max_attempts_attr = retry.get("max_attempts_attr", cfg.retry_max_attempts_attr)
+    cfg.retry_backoff_attr = retry.get("backoff_attr", cfg.retry_backoff_attr)
+    cfg.retry_reason_attr = retry.get("reason_attr", cfg.retry_reason_attr)
+    cfg.retry_policy_attr = retry.get("policy_attr", cfg.retry_policy_attr)
 
     db = data.get("db") or {}
-    cfg.db_system_attr          = db.get("system_attr",           cfg.db_system_attr)
-    cfg.db_operation_patterns   = list(db.get("operation_patterns", cfg.db_operation_patterns))
-    cfg.db_pool_acquired_attr   = (db.get("pool") or {}).get("acquired_attr",  cfg.db_pool_acquired_attr)
-    cfg.db_pool_max_attr        = (db.get("pool") or {}).get("max_attr",       cfg.db_pool_max_attr)
-    cfg.db_pool_wait_attr       = (db.get("pool") or {}).get("wait_ms_attr",   cfg.db_pool_wait_attr)
-    cfg.db_pool_empty_acquires_attr = (db.get("pool") or {}).get("empty_acquires_attr", cfg.db_pool_empty_acquires_attr)
-    cfg.db_acquire_operation_names = list((db.get("pool") or {}).get("acquire_operation_names", cfg.db_acquire_operation_names))
+    cfg.db_system_attr = db.get("system_attr", cfg.db_system_attr)
+    cfg.db_operation_patterns = list(db.get("operation_patterns", cfg.db_operation_patterns))
+    cfg.db_pool_acquired_attr = (db.get("pool") or {}).get(
+        "acquired_attr", cfg.db_pool_acquired_attr
+    )
+    cfg.db_pool_max_attr = (db.get("pool") or {}).get("max_attr", cfg.db_pool_max_attr)
+    cfg.db_pool_wait_attr = (db.get("pool") or {}).get("wait_ms_attr", cfg.db_pool_wait_attr)
+    cfg.db_pool_empty_acquires_attr = (db.get("pool") or {}).get(
+        "empty_acquires_attr", cfg.db_pool_empty_acquires_attr
+    )
+    cfg.db_acquire_operation_names = list(
+        (db.get("pool") or {}).get("acquire_operation_names", cfg.db_acquire_operation_names)
+    )
 
     if "http_status_attrs" in data:
         cfg.http_status_attrs = list(data["http_status_attrs"])
@@ -150,12 +158,17 @@ def _config_from_dict(data: dict[str, Any], source_name: str) -> NormalizationCo
 
     state = data.get("state_transitions") or {}
     cfg.state_transition_event_name = state.get("event_name", cfg.state_transition_event_name)
-    cfg.state_transition_from_attr  = state.get("from_attr",  cfg.state_transition_from_attr)
-    cfg.state_transition_to_attr    = state.get("to_attr",    cfg.state_transition_to_attr)
+    cfg.state_transition_from_attr = state.get("from_attr", cfg.state_transition_from_attr)
+    cfg.state_transition_to_attr = state.get("to_attr", cfg.state_transition_to_attr)
 
     known_top_level = {
-        "name", "business_keys", "retry", "db",
-        "http_status_attrs", "handler_operation_patterns", "state_transitions",
+        "name",
+        "business_keys",
+        "retry",
+        "db",
+        "http_status_attrs",
+        "handler_operation_patterns",
+        "state_transitions",
     }
     unknown = set(data) - known_top_level
     if unknown:

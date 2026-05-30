@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 import logging
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from .models import LogEntry
 
@@ -80,7 +80,7 @@ class DockerLogsClient:
             try:
                 ts = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
             except ValueError:
-                ts = datetime.now(tz=timezone.utc)
+                ts = datetime.now(tz=UTC)
                 rest = line
             # Try JSON (structured slog) first; fall back to raw text.
             data: dict

@@ -27,11 +27,11 @@ RULE_CONTRACTS: tuple[RuleContract, ...] = (
         rule_id="concurrent_modification",
         description="Two operations mutating the same business entity overlapping in time",
         required_signals=(
-            "business_keys",            # business_key_attrs must be non-empty
-            "state_transitions",        # state_transition events must be configured
+            "business_keys",  # business_key_attrs must be non-empty
+            "state_transitions",  # state_transition events must be configured
         ),
         optional_signals=(
-            "warn_logs",                # WARN log corroboration (+0.12 confidence)
+            "warn_logs",  # WARN log corroboration (+0.12 confidence)
         ),
         fires_on_abstain="returns [] silently — engine sees no rule match",
     ),
@@ -39,13 +39,13 @@ RULE_CONTRACTS: tuple[RuleContract, ...] = (
         rule_id="retry_storm",
         description="2+ same-operation retries in a single trace",
         required_signals=(
-            "retry_attempt",            # retry.attempt attribute present on retry spans
+            "retry_attempt",  # retry.attempt attribute present on retry spans
         ),
         optional_signals=(
-            "retry_reason",             # consistent reason → +0.05
-            "retry_backoff_ms",         # detect exponential pattern → +0.04
-            "retry_max_attempts",       # detect exhaustion → +0.03
-            "error_logs",               # ERROR-level log corroboration → +0.02
+            "retry_reason",  # consistent reason → +0.05
+            "retry_backoff_ms",  # detect exponential pattern → +0.04
+            "retry_max_attempts",  # detect exhaustion → +0.03
+            "error_logs",  # ERROR-level log corroboration → +0.02
         ),
         fires_on_abstain="returns [] silently if no retry.attempt present anywhere",
     ),
@@ -53,12 +53,12 @@ RULE_CONTRACTS: tuple[RuleContract, ...] = (
         rule_id="downstream_error",
         description="ERROR-status chain crossing a service boundary",
         required_signals=(
-            "span_error_status",        # span.is_error must be set by instrumentation
-            "service_boundary",         # spans must carry service_name across services
+            "span_error_status",  # span.is_error must be set by instrumentation
+            "service_boundary",  # spans must carry service_name across services
         ),
         optional_signals=(
-            "http_status",              # phrases evidence as 'HTTP 503' etc.
-            "error_logs",               # corroborating evidence
+            "http_status",  # phrases evidence as 'HTTP 503' etc.
+            "error_logs",  # corroborating evidence
         ),
         fires_on_abstain="returns [] silently if no cross-service ERROR chain exists",
     ),
@@ -66,12 +66,12 @@ RULE_CONTRACTS: tuple[RuleContract, ...] = (
         rule_id="db_pool_exhaustion",
         description="DB connection pool saturated — latency in acquire, not query",
         required_signals=(
-            "db_pool_stats",            # db.pool.acquired AND db.pool.max AND db.pool.wait_ms
+            "db_pool_stats",  # db.pool.acquired AND db.pool.max AND db.pool.wait_ms
         ),
         optional_signals=(
-            "db_query_span",            # contrasting healthy-query span → +0.05
-            "warn_logs",                # WARN log corroboration → +0.05
-            "empty_acquires_total",     # proves pool actually ran dry → +0.03
+            "db_query_span",  # contrasting healthy-query span → +0.05
+            "warn_logs",  # WARN log corroboration → +0.05
+            "empty_acquires_total",  # proves pool actually ran dry → +0.03
         ),
         fires_on_abstain=(
             "returns [] silently if no span carries db.pool.* attributes — "
@@ -83,7 +83,7 @@ RULE_CONTRACTS: tuple[RuleContract, ...] = (
         description="Application-layer latency above the DB layer",
         required_signals=(
             "handler_span_identifiable",  # operation name matches handler pattern
-            "db_child_span",              # at least one db.* child span with duration
+            "db_child_span",  # at least one db.* child span with duration
         ),
         optional_signals=(),
         fires_on_abstain="returns [] silently if no handler/DB child relationship found",

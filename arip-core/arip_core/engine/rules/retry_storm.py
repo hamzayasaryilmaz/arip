@@ -23,13 +23,11 @@ What this rule deliberately does NOT do:
 
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 
 from ...correlator.models import CorrelatedTelemetry, Span
 from ..models import Evidence, Hypothesis
 from .base import jaeger_link
-
 
 MIN_ATTEMPTS_FOR_STORM = 2
 
@@ -63,7 +61,6 @@ class RetryStormRule:
         trace_id, operation = worst_key
         upstream_service = chain[0].service_name
 
-        attempts = [signals.retry_attempt(s) or 0 for s in chain]
         backoffs = [signals.retry_backoff_ms(s) or 0 for s in chain]
         reasons = [signals.retry_reason(s) for s in chain if signals.retry_reason(s)]
         max_attempts_field = signals.retry_max_attempts(chain[-1])
@@ -78,9 +75,7 @@ class RetryStormRule:
         # retry.reason — counting only those would falsely report
         # "consistent". Anchor against the full attempt set.
         all_attempts_errored = errored == attempts_used
-        unique_reasons = {
-            r.strip() if isinstance(r, str) else r for r in reasons
-        }
+        unique_reasons = {r.strip() if isinstance(r, str) else r for r in reasons}
         truly_persistent = all_attempts_errored and len(unique_reasons) == 1 and bool(reasons)
 
         # Temporal: cumulative wall-clock time spent in the chain
@@ -90,11 +85,10 @@ class RetryStormRule:
         cumulative_ms = (chain_end - chain_start).total_seconds() * 1000
 
         is_exponential = _looks_exponential(backoffs)
-        # consistent_reason is a confidence-bumping signal — keep it
-        # forgiving (success attempts have no reason). truly_persistent
-        # is the stricter test, gated by all_attempts_errored, and
-        # gates whether we make the strong claim in the description.
-        consistent_reason = len(unique_reasons) <= 1 and bool(reasons)
+        # `truly_persistent` (computed above) is what gates both
+        # the strong "every attempt failed with the same reason"
+        # description AND the consistent-reason confidence bump.
+        # We use the same stricter test in both places intentionally.
         exhausted = max_attempts_field is not None and attempts_used >= max_attempts_field
 
         # --- evidence assembly --------------------------------------
@@ -133,7 +127,8 @@ class RetryStormRule:
         # the retries. Phrase precisely — "each" only if EVERY attempt
         # hit a downstream error; otherwise "some" with the count.
         downstream_errors = [
-            s for s in ct.spans
+            s
+            for s in ct.spans
             if s.trace_id == trace_id and s.is_error and s.service_name != upstream_service
         ]
         if downstream_errors:
@@ -182,13 +177,13 @@ class RetryStormRule:
 
         amplification = attempts_used  # one logical request → N inventory calls
         backoff_phrase = (
-            f" with exponential backoff ({_format_backoffs(backoffs)})"
-            if is_exponential else ""
+            f" with exponential backoff ({_format_backoffs(backoffs)})" if is_exponential else ""
         )
         exhaustion_phrase = (
             f" The retry policy exhausted at {attempts_used}/{max_attempts_field}; "
             "the client request failed because retries did not recover."
-            if exhausted else ""
+            if exhausted
+            else ""
         )
         # Only make the strong "persistent" claim when EVERY attempt
         # actually failed. If the retry succeeded eventually, this was
@@ -226,8 +221,7 @@ class RetryStormRule:
             Hypothesis(
                 rule_id=self.rule_id,
                 title=(
-                    f"Retry storm: {attempts_used} attempts to `{operation}` "
-                    f"in {upstream_service}"
+                    f"Retry storm: {attempts_used} attempts to `{operation}` in {upstream_service}"
                 ),
                 description=description,
                 confidence=_confidence(
@@ -242,17 +236,17 @@ class RetryStormRule:
                 evidence=evidence,
                 suggested_next_step=(
                     (
-                        f"Stabilise the downstream first: every retry hit "
-                        f"the same failure, so adding more retries will "
-                        f"not help. "
-                        if truly_persistent else
-                        f"The retry policy recovered the request, but the "
+                        "Stabilise the downstream first: every retry hit "
+                        "the same failure, so adding more retries will "
+                        "not help. "
+                        if truly_persistent
+                        else f"The retry policy recovered the request, but the "
                         f"chain itself adds latency. Consider whether "
                         f"{attempts_used} attempts are appropriate for this "
                         f"call site, and look for a way to make the downstream "
                         f"more reliable so retries are not needed. "
-                    ) +
-                    f"Reconsider the retry policy: {attempts_used} attempts "
+                    )
+                    + f"Reconsider the retry policy: {attempts_used} attempts "
                     f"with `{policy}` backoff amplifies load by {amplification}× "
                     f"during incidents and can prolong outages."
                 ),
@@ -274,10 +268,12 @@ def _as_int(v) -> int | None:
 
 def _looks_exponential(backoffs: list[int]) -> bool:
     """Return True if the non-zero backoffs roughly double each step."""
+    from itertools import pairwise
+
     nonzero = [b for b in backoffs if b > 0]
     if len(nonzero) < 2:
         return False
-    for prev, curr in zip(nonzero, nonzero[1:]):
+    for prev, curr in pairwise(nonzero):
         if prev == 0:
             continue
         ratio = curr / prev

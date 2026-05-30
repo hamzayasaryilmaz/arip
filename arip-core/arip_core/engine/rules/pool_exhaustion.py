@@ -50,7 +50,9 @@ class PoolExhaustionRule:
             slow_acquire = stats.wait_ms >= SATURATION_WAIT_MS
             if not (stats.at_capacity or slow_acquire):
                 continue
-            saturated.append((s, stats.acquired, stats.max_size, stats.wait_ms, stats.empty_acquires_total or 0))
+            saturated.append(
+                (s, stats.acquired, stats.max_size, stats.wait_ms, stats.empty_acquires_total or 0)
+            )
 
         if not saturated:
             return []
@@ -75,12 +77,14 @@ class PoolExhaustionRule:
                 span_id=worst_span.span_id,
                 service=service,
                 link=jaeger_link(worst_span.trace_id),
-                snippet=str({
-                    "db.pool.acquired": acquired,
-                    "db.pool.max": max_conns,
-                    "db.pool.wait_ms": wait_ms,
-                    "db.pool.empty_acquires_total": empties,
-                }),
+                snippet=str(
+                    {
+                        "db.pool.acquired": acquired,
+                        "db.pool.max": max_conns,
+                        "db.pool.wait_ms": wait_ms,
+                        "db.pool.empty_acquires_total": empties,
+                    }
+                ),
             )
         )
 
@@ -99,7 +103,7 @@ class PoolExhaustionRule:
                         kind="span",
                         description=(
                             f"`{s.operation_name}` itself only took "
-                            f"{s.duration_us/1000:.1f}ms — the database "
+                            f"{s.duration_us / 1000:.1f}ms — the database "
                             f"layer is healthy, the wait is at the pool."
                         ),
                         trace_id=s.trace_id,
@@ -117,8 +121,7 @@ class PoolExhaustionRule:
                     Evidence(
                         kind="span",
                         description=(
-                            f"Upstream `{s.service_name}.{s.operation_name}` "
-                            f"surfaced ERROR: {msg}"
+                            f"Upstream `{s.service_name}.{s.operation_name}` surfaced ERROR: {msg}"
                         ),
                         trace_id=s.trace_id,
                         span_id=s.span_id,
@@ -129,8 +132,7 @@ class PoolExhaustionRule:
         # Corroborating logs — pool-related WARN/ERROR.
         for log in ct.logs:
             if log.level in {"WARN", "ERROR"} and (
-                "pool" in log.message.lower()
-                or "acquire" in log.message.lower()
+                "pool" in log.message.lower() or "acquire" in log.message.lower()
             ):
                 evidence.append(
                     Evidence(
@@ -183,10 +185,10 @@ def _as_int(v) -> int | None:
 def _confidence_score(evidence: list[Evidence], *, empties: int) -> float:
     """Confidence rises with corroborating signal strength:
 
-      - baseline 0.80 (pool stats + saturated acquire span)
-      - +0.05 if there's a healthy-query contrast span
-      - +0.05 if there's a WARN/ERROR log mentioning the pool
-      - +0.03 if empty_acquires > 0 (proves the pool actually ran dry)
+    - baseline 0.80 (pool stats + saturated acquire span)
+    - +0.05 if there's a healthy-query contrast span
+    - +0.05 if there's a WARN/ERROR log mentioning the pool
+    - +0.03 if empty_acquires > 0 (proves the pool actually ran dry)
     """
     score = 0.80
     if any(e.kind == "span" and "healthy" in e.description for e in evidence):

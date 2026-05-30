@@ -20,8 +20,6 @@ import subprocess
 import sys
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TEMPO_TOOL = REPO_ROOT / "bin" / "tempo-export-to-bundles.py"
 
@@ -52,31 +50,37 @@ def _make_tempo_response(
 ) -> dict:
     """Build a realistic Tempo `/api/traces/<id>` response."""
     if spans is None:
-        spans = [{
-            "traceId": _b64(trace_id_hex),
-            "spanId": _b64("05e793140372fa88"),
-            "parentSpanId": _b64("79e4d4bdb79c50fc"),
-            "name": "handle_request",
-            "startTimeUnixNano": "1780153620000000000",
-            "endTimeUnixNano": "1780153620000057000",
-            "attributes": [
-                {"key": "http.method", "value": {"stringValue": "GET"}},
-                {"key": "http.status_code", "value": {"intValue": "200"}},
-            ],
-            "status": {"code": 1, "message": ""},
-        }]
-    return {
-        "batches": [{
-            "resource": {
+        spans = [
+            {
+                "traceId": _b64(trace_id_hex),
+                "spanId": _b64("05e793140372fa88"),
+                "parentSpanId": _b64("79e4d4bdb79c50fc"),
+                "name": "handle_request",
+                "startTimeUnixNano": "1780153620000000000",
+                "endTimeUnixNano": "1780153620000057000",
                 "attributes": [
-                    {"key": "service.name", "value": {"stringValue": service_name}},
-                ]
-            },
-            "scopeSpans": [{
-                "scope": {"name": "test-scope"},
-                "spans": spans,
-            }],
-        }]
+                    {"key": "http.method", "value": {"stringValue": "GET"}},
+                    {"key": "http.status_code", "value": {"intValue": "200"}},
+                ],
+                "status": {"code": 1, "message": ""},
+            }
+        ]
+    return {
+        "batches": [
+            {
+                "resource": {
+                    "attributes": [
+                        {"key": "service.name", "value": {"stringValue": service_name}},
+                    ]
+                },
+                "scopeSpans": [
+                    {
+                        "scope": {"name": "test-scope"},
+                        "spans": spans,
+                    }
+                ],
+            }
+        ]
     }
 
 
@@ -105,20 +109,22 @@ def test_tempo_adapter_handles_otlp_attribute_types(tmp_path: Path) -> None:
     """OTLP attribute value wrappers (intValue/boolValue/stringValue/doubleValue)
     are coerced to plain JSON values."""
     src = tmp_path / "tempo.json"
-    spans = [{
-        "traceId": _b64("11" * 16),
-        "spanId": _b64("aa" * 8),
-        "name": "test",
-        "startTimeUnixNano": "1780153620000000000",
-        "endTimeUnixNano": "1780153620000010000",
-        "attributes": [
-            {"key": "str_attr", "value": {"stringValue": "hello"}},
-            {"key": "int_attr", "value": {"intValue": "42"}},
-            {"key": "bool_attr", "value": {"boolValue": True}},
-            {"key": "double_attr", "value": {"doubleValue": 1.5}},
-        ],
-        "status": {"code": 1},
-    }]
+    spans = [
+        {
+            "traceId": _b64("11" * 16),
+            "spanId": _b64("aa" * 8),
+            "name": "test",
+            "startTimeUnixNano": "1780153620000000000",
+            "endTimeUnixNano": "1780153620000010000",
+            "attributes": [
+                {"key": "str_attr", "value": {"stringValue": "hello"}},
+                {"key": "int_attr", "value": {"intValue": "42"}},
+                {"key": "bool_attr", "value": {"boolValue": True}},
+                {"key": "double_attr", "value": {"doubleValue": 1.5}},
+            ],
+            "status": {"code": 1},
+        }
+    ]
     src.write_text(json.dumps(_make_tempo_response(spans=spans)))
     dst = tmp_path / "bundles.jsonl"
 
@@ -135,15 +141,17 @@ def test_tempo_adapter_handles_otlp_attribute_types(tmp_path: Path) -> None:
 def test_tempo_adapter_maps_status_code(tmp_path: Path) -> None:
     """OTLP status code 2 → 'ERROR' status, message preserved."""
     src = tmp_path / "tempo.json"
-    spans = [{
-        "traceId": _b64("22" * 16),
-        "spanId": _b64("bb" * 8),
-        "name": "failing_op",
-        "startTimeUnixNano": "1780153620000000000",
-        "endTimeUnixNano": "1780153620000050000",
-        "attributes": [],
-        "status": {"code": 2, "message": "downstream returned 503"},
-    }]
+    spans = [
+        {
+            "traceId": _b64("22" * 16),
+            "spanId": _b64("bb" * 8),
+            "name": "failing_op",
+            "startTimeUnixNano": "1780153620000000000",
+            "endTimeUnixNano": "1780153620000050000",
+            "attributes": [],
+            "status": {"code": 2, "message": "downstream returned 503"},
+        }
+    ]
     src.write_text(json.dumps(_make_tempo_response(spans=spans)))
     dst = tmp_path / "bundles.jsonl"
 
@@ -190,21 +198,27 @@ def test_tempo_adapter_handles_missing_service_name(tmp_path: Path) -> None:
     'unknown' rather than dropping the trace."""
     src = tmp_path / "tempo.json"
     payload = {
-        "batches": [{
-            "resource": {"attributes": []},
-            "scopeSpans": [{
-                "scope": {"name": "s"},
-                "spans": [{
-                    "traceId": _b64("33" * 16),
-                    "spanId": _b64("cc" * 8),
-                    "name": "anon",
-                    "startTimeUnixNano": "1780153620000000000",
-                    "endTimeUnixNano": "1780153620000001000",
-                    "attributes": [],
-                    "status": {"code": 1},
-                }],
-            }],
-        }]
+        "batches": [
+            {
+                "resource": {"attributes": []},
+                "scopeSpans": [
+                    {
+                        "scope": {"name": "s"},
+                        "spans": [
+                            {
+                                "traceId": _b64("33" * 16),
+                                "spanId": _b64("cc" * 8),
+                                "name": "anon",
+                                "startTimeUnixNano": "1780153620000000000",
+                                "endTimeUnixNano": "1780153620000001000",
+                                "attributes": [],
+                                "status": {"code": 1},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
     }
     src.write_text(json.dumps(payload))
     dst = tmp_path / "bundles.jsonl"

@@ -12,7 +12,10 @@ from arip_core.engine.models import Evidence, Hypothesis
 
 def _h(rule_id: str, conf: float = 0.85) -> Hypothesis:
     return Hypothesis(
-        title="t", description="d", confidence=conf, severity="high",
+        title="t",
+        description="d",
+        confidence=conf,
+        severity="high",
         rule_id=rule_id,
         evidence=[Evidence(kind="span", description="x", span_id="s", trace_id="t")],
     )
@@ -91,6 +94,7 @@ def test_clamp_to_min_confidence():
 def test_alignment_is_set_complete():
     """The rule alignment table must cover every shipped rule_id."""
     from arip_core.engine.hypothesis import default_rules
+
     shipped = {r.rule_id for r in default_rules()}
     documented = set(RULE_ALIGNMENT.keys())
     missing = shipped - documented

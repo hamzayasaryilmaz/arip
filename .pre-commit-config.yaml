@@ -1,0 +1,32 @@
+# Pre-commit hooks for ARIP.
+#
+# Install: `pip install pre-commit && pre-commit install`
+# Run manually: `pre-commit run --all-files`
+#
+# This config is intentionally minimal — it enforces the same lint
+# and format rules the CI does, plus standard sanity checks. It
+# does NOT run the test suite (use `uv run pytest -q` for that).
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-case-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.15
+    hooks:
+      - id: ruff
+        # Match the configuration in arip-core/pyproject.toml.
+        args: [--fix, --exit-non-zero-on-fix]
+        files: ^arip-core/
+      - id: ruff-format
+        files: ^arip-core/
